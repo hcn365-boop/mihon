@@ -203,8 +203,8 @@ baselineProfile {
 
 dependencies {
     baselineProfile(projects.baselineProfile)
-implementation(libs.onnxruntime.android)
-implementation(libs.opencv.android)
+    implementation(libs.onnxruntime.android)
+    implementation(libs.opencv.android)
     implementation(projects.i18n)
     implementation(projects.icons.materialSymbols)
     implementation(projects.icons.simpleIcons)
