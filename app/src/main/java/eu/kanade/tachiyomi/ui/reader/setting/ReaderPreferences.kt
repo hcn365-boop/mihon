@@ -161,6 +161,14 @@ class ReaderPreferences(
     val invertedColors: Preference<Boolean> = preferenceStore.getBoolean("pref_inverted_colors", false)
 
     // endregion
+    
+    // region Colorization
+
+    val colorizeEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_colorize_enabled", false)
+
+    val colorizeIntensity: Preference<Int> = preferenceStore.getInt("pref_colorize_intensity", 100)
+
+    // endregion
 
     // region Controls
 
