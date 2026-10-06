@@ -7,6 +7,7 @@ import androidx.core.view.isVisible
 import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.tachiyomi.databinding.ReaderErrorBinding
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.ui.reader.colorize.PageColorizer
 import eu.kanade.tachiyomi.ui.reader.model.InsertPage
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
@@ -151,7 +152,15 @@ class PagerPageHolder(
 
         try {
             val (source, isAnimated, background) = withIOContext {
-                val source = streamFn().use { process(item, Buffer().readFrom(it)) }
+                    val source = streamFn().use { stream ->
+                    val original = Buffer().readFrom(stream)
+                    val colored = if (viewer.config.colorizeEnabled) {
+                        PageColorizer.colorize(context, original, viewer.config.colorizeIntensity)
+                    } else {
+                        original
+                    }
+                    process(item, colored)
+                }
                 val isAnimated = ImageUtil.isAnimatedAndSupported(source)
                 val background = if (!isAnimated && viewer.config.automaticBackground) {
                     ImageUtil.chooseBackground(context, source.peek().inputStream())
