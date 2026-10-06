@@ -168,6 +168,8 @@ class ReaderPreferences(
 
     val colorizeIntensity: Preference<Int> = preferenceStore.getInt("pref_colorize_intensity", 100)
 
+    val colorizeModelUrl: Preference<String> = preferenceStore.getString("pref_colorize_model_url", COLORIZE_MODEL_URL)
+
     // endregion
 
     // region Controls
