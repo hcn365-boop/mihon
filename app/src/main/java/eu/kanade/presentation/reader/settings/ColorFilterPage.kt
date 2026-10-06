@@ -23,6 +23,38 @@ import tachiyomi.presentation.core.util.collectAsState
 @Composable
 internal fun ColumnScope.ColorFilterPage(viewModel: ReaderSettingsViewModel) {
     val customBrightness by viewModel.preferences.customBrightness.collectAsState()
+    val colorizeEnabled by readerPreferences.colorizeEnabled().collectAsState()
+    val colorizeIntensity by readerPreferences.colorizeIntensity().collectAsState()
+
+    // 1. خيار تفعيل/إلغاء التفعيل (Checkbox)
+CheckboxItem(
+    label = "Colorize", // أو الاسم الذي تفضله
+    checked = colorizeEnabled,
+    onClick = { 
+        readerPreferences.colorizeEnabled().set(!colorizeEnabled) 
+    },
+)
+
+// 2. شريط السحب للتحكم بالشدة (يظهر فقط عند التفعيل)
+if (colorizeEnabled) {
+    Column(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = "Colorize intensity: $colorizeIntensity%",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Slider(
+            value = colorizeIntensity.toFloat(),
+            onValueChange = { newValue ->
+                readerPreferences.colorizeIntensity().set(newValue.toInt())
+            },
+            valueRange = 0f..1.5f, // أو المدى الذي تحدده
+        )
+    }
+}
+
+
     CheckboxItem(
         label = stringResource(MR.strings.pref_custom_brightness),
         pref = viewModel.preferences.customBrightness,
