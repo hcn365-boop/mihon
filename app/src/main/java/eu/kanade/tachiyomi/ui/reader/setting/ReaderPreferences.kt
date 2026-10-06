@@ -299,7 +299,10 @@ class ReaderPreferences(
         const val WEBTOON_PADDING_MAX = 25
 
         const val MILLI_CONVERSION = 100
-
+        
+        const val COLORIZE_MODEL_URL = "https://huggingface.co/sharky172/manga-light-colorizer/resolve/" +
+            "2fb022c4ce55632b7671a1df306f63984928e36a/models/v6_generator.onnx"
+        
         val TapZones = listOf(
             MR.strings.label_default,
             MR.strings.l_nav,
