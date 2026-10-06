@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderProgressIndicator
+import eu.kanade.tachiyomi.ui.reader.colorize.PageColorizer
 import eu.kanade.tachiyomi.ui.webview.WebViewActivity
 import eu.kanade.tachiyomi.util.system.dpToPx
 import kotlinx.coroutines.Job
@@ -191,7 +192,15 @@ class WebtoonPageHolder(
 
         try {
             val (source, isAnimated) = withIOContext {
-                val source = streamFn().use { process(Buffer().readFrom(it)) }
+                    val source = streamFn().use { stream ->
+                    val original = Buffer().readFrom(stream)
+                    val colored = if (viewer.config.colorizeEnabled) {
+                        PageColorizer.colorize(context, original, viewer.config.colorizeIntensity)
+                    } else {
+                        original
+                    }
+                    process(colored)
+                }
                 val isAnimated = ImageUtil.isAnimatedAndSupported(source)
                 Pair(source, isAnimated)
             }
