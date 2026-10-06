@@ -35,7 +35,7 @@ internal fun ColumnScope.ColorFilterPage(viewModel: ReaderSettingsViewModel) {
         val colorizeIntensity by viewModel.preferences.colorizeIntensity.collectAsState()
         SliderItem(
             value = colorizeIntensity,
-            valueRange = 0..2, // نطاق الشدة من 0 إلى 100
+            valueRange = 0..200, // نطاق الشدة من 0 إلى 100
             steps = 0,
             label = "Colorize intensity",
             onChange = { viewModel.preferences.colorizeIntensity.set(it) },
