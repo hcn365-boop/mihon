@@ -22,39 +22,30 @@ import tachiyomi.presentation.core.util.collectAsState
 
 @Composable
 internal fun ColumnScope.ColorFilterPage(viewModel: ReaderSettingsViewModel) {
-    val customBrightness by viewModel.preferences.customBrightness.collectAsState()
-    val colorizeEnabled by readerPreferences.colorizeEnabled().collectAsState()
-    val colorizeIntensity by readerPreferences.colorizeIntensity().collectAsState()
+    
+    // الإعدادات الجديدة الخاصة بك
+    val colorizeEnabled by viewModel.preferences.colorizeEnabled.collectAsState()
 
-    // 1. خيار تفعيل/إلغاء التفعيل (Checkbox)
-CheckboxItem(
-    label = "Colorize", // أو الاسم الذي تفضله
-    checked = colorizeEnabled,
-    onClick = { 
-        readerPreferences.colorizeEnabled().set(!colorizeEnabled) 
-    },
-)
+    CheckboxItem(
+        label = "Colorize",
+        pref = viewModel.preferences.colorizeEnabled,
+    )
 
-// 2. شريط السحب للتحكم بالشدة (يظهر فقط عند التفعيل)
-if (colorizeEnabled) {
-    Column(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Text(
-            text = "Colorize intensity: $colorizeIntensity%",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Slider(
-            value = colorizeIntensity.toFloat(),
-            onValueChange = { newValue ->
-                readerPreferences.colorizeIntensity().set(newValue.toInt())
-            },
-            valueRange = 0f..1.5f, // أو المدى الذي تحدده
+    if (colorizeEnabled) {
+        val colorizeIntensity by viewModel.preferences.colorizeIntensity.collectAsState()
+        SliderItem(
+            value = colorizeIntensity,
+            valueRange = 0..2, // نطاق الشدة من 0 إلى 100
+            steps = 0,
+            label = "Colorize intensity",
+            onChange = { viewModel.preferences.colorizeIntensity.set(it) },
+            pillColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         )
     }
-}
 
+    // نهاية الإعدادات الجديدة
 
+    val customBrightness by viewModel.preferences.customBrightness.collectAsState()
     CheckboxItem(
         label = stringResource(MR.strings.pref_custom_brightness),
         pref = viewModel.preferences.customBrightness,
