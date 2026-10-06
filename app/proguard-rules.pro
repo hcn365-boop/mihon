@@ -91,3 +91,6 @@
     public <init>();
     public void destroy();
 }
+# ONNX Runtime JNI Fix
+-keep class ai.onnxruntime.** { *; }
+
