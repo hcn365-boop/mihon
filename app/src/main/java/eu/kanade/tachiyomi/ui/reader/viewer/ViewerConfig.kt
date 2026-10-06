@@ -42,6 +42,12 @@ abstract class ViewerConfig(readerPreferences: ReaderPreferences, private val sc
     var dualPageRotateToFitInvert = false
         protected set
 
+    var colorizeEnabled = false
+        protected set
+
+    var colorizeIntensity = 1f
+        protected set
+
     abstract var navigator: ViewerNavigation
         protected set
 
