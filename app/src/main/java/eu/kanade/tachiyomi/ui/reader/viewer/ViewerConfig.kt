@@ -77,6 +77,12 @@ abstract class ViewerConfig(readerPreferences: ReaderPreferences, private val sc
 
         readerPreferences.showNavigationOverlayOnStart
             .register({ navigationOverlayOnStart = it })
+
+        readerPreferences.colorizeEnabled
+            .register({ colorizeEnabled = it }, { imagePropertyChangedListener?.invoke() })
+
+        readerPreferences.colorizeIntensity
+            .register({ colorizeIntensity = it / 100f }, { imagePropertyChangedListener?.invoke() })
     }
 
     protected abstract fun defaultNavigation(): ViewerNavigation
