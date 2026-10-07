@@ -194,11 +194,7 @@ class WebtoonPageHolder(
             val (source, isAnimated) = withIOContext {
                     val source = streamFn().use { stream ->
                     val original = Buffer().readFrom(stream)
-                    val colored = if (viewer.config.colorizeEnabled) {
-                        PageColorizer.colorize(context, original, viewer.config.colorizeIntensity)
-                    } else {
-                        original
-                    }
+                    val colored = if (AiConfig.anyEnabled) PageColorizer.process(context, original) else original
                     process(colored)
                 }
                 val isAnimated = ImageUtil.isAnimatedAndSupported(source)
