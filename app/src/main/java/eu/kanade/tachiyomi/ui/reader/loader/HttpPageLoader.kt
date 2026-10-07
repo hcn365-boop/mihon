@@ -39,7 +39,7 @@ internal class HttpPageLoader(
      */
     private val queue = PriorityBlockingQueue<PriorityPage>()
 
-    private val preloadSize = 4
+    private val preloadSize get() = AiConfig.pagePreload
 
     init {
         scope.launchIO {
