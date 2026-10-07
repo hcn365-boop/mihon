@@ -166,11 +166,13 @@ class ReaderPreferences(
 
     val colorizeEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_colorize_enabled", false)
 
-    val colorizeIntensity: Preference<Int> = preferenceStore.getInt("pref_colorize_intensity", 100)
+    val colorizeIntensity: Preference<Int> = preferenceStore.getInt("pref_colorize_intensity", 120)
+
+    val pagePreloadCount: Preference<Int> = preferenceStore.getInt("pref_page_preload", 4)
 
     val colorizeModelUrl: Preference<String> = preferenceStore.getString("pref_colorize_model_url", COLORIZE_MODEL_URL)
 
-        val upscaleEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_upscale_enabled", false)
+    val upscaleEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_upscale_enabled", false)
 
     val upscaleModelUrl: Preference<String> = preferenceStore.getString("pref_upscale_model_url", UPSCALE_MODEL_URL)
 
