@@ -29,6 +29,7 @@ fun ReaderSettingsDialog(
         stringResource(MR.strings.pref_category_reading_mode),
         stringResource(MR.strings.pref_category_general),
         stringResource(MR.strings.custom_filter),
+        "AI",  
     )
     val pagerState = rememberPagerState { tabTitles.size }
 
@@ -63,6 +64,7 @@ fun ReaderSettingsDialog(
                     0 -> ReadingModePage(viewModel)
                     1 -> GeneralPage(viewModel)
                     2 -> ColorFilterPage(viewModel)
+                    3 -> AiPage(viewModel)
                 }
             }
         }
