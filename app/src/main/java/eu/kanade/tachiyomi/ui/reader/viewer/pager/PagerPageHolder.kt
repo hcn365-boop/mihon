@@ -50,7 +50,7 @@ class PagerPageHolder(
     /**
      * Loading progress bar to indicate the current progress.
      */
-    private var progressIndicator: ReaderProgressIndicator? = null // = ReaderProgressIndicator(readerThemedContext)
+    private var progressIndicator: ReaderProgressIndicator? = null
 
     /**
      * Error layout to show when the image fails to load.
@@ -87,10 +87,6 @@ class PagerPageHolder(
 
     /**
      * Loads the page and processes changes to the page's status.
-     *
-     * Returns immediately if the page has no PageLoader.
-     * Otherwise, this function does not return. It will continue to process status changes until
-     * the Job is cancelled.
      */
     private suspend fun loadPageAndProcessStatus() {
         val loader = page.chapter.pageLoader ?: return
@@ -153,9 +149,11 @@ class PagerPageHolder(
 
         try {
             val (source, isAnimated, background) = withIOContext {
-                    val source = streamFn().use { stream ->
+                val source = streamFn().use { stream ->
                     val original = Buffer().readFrom(stream)
                     val colored = if (AiConfig.anyEnabled) PageColorizer.process(context, original) else original
+                    process(page, colored)
+                }
                 val isAnimated = ImageUtil.isAnimatedAndSupported(source)
                 val background = if (!isAnimated && viewer.config.automaticBackground) {
                     ImageUtil.chooseBackground(context, source.peek().inputStream())
