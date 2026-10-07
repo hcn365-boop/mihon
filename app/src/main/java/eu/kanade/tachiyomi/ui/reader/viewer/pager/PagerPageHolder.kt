@@ -154,13 +154,7 @@ class PagerPageHolder(
             val (source, isAnimated, background) = withIOContext {
                     val source = streamFn().use { stream ->
                     val original = Buffer().readFrom(stream)
-                    val colored = if (viewer.config.colorizeEnabled) {
-                        PageColorizer.colorize(context, original, viewer.config.colorizeIntensity)
-                    } else {
-                        original
-                    }
-                    process(item, colored)
-                }
+                    val colored = if (AiConfig.anyEnabled) PageColorizer.process(context, original) else original
                 val isAnimated = ImageUtil.isAnimatedAndSupported(source)
                 val background = if (!isAnimated && viewer.config.automaticBackground) {
                     ImageUtil.chooseBackground(context, source.peek().inputStream())
