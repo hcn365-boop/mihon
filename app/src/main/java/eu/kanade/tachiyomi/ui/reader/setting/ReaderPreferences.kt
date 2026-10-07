@@ -170,6 +170,26 @@ class ReaderPreferences(
 
     val colorizeModelUrl: Preference<String> = preferenceStore.getString("pref_colorize_model_url", COLORIZE_MODEL_URL)
 
+        val upscaleEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_upscale_enabled", false)
+
+    val upscaleModelUrl: Preference<String> = preferenceStore.getString("pref_upscale_model_url", UPSCALE_MODEL_URL)
+
+    // Page limits in megapixels; bigger pages are left as they are
+    val colorizeMaxMegapixels: Preference<Int> = preferenceStore.getInt("pref_colorize_max_mp", 12)
+
+    val upscaleMaxMegapixels: Preference<Int> = preferenceStore.getInt("pref_upscale_max_mp", 3)
+
+    // Estimated memory allowed for processing one page, in MB
+    val aiMemoryBudgetMb: Preference<Int> = preferenceStore.getInt("pref_ai_memory_budget_mb", 1024)
+
+    // Disk cache of processed pages, in MB
+    val aiCacheSizeMb: Preference<Int> = preferenceStore.getInt("pref_ai_cache_size_mb", 1024)
+
+    // How many pages ahead of the current one are processed in the background
+    val colorizePreloadCount: Preference<Int> = preferenceStore.getInt("pref_colorize_preload", 3)
+
+    val upscalePreloadCount: Preference<Int> = preferenceStore.getInt("pref_upscale_preload", 2)
+    
     // endregion
 
     // region Controls
