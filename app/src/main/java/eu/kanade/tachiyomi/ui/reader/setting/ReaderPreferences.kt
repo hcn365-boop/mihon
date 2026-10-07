@@ -322,6 +322,8 @@ class ReaderPreferences(
         
         const val COLORIZE_MODEL_URL = "https://huggingface.co/sharky172/manga-light-colorizer/resolve/" +
             "2fb022c4ce55632b7671a1df306f63984928e36a/models/v6_generator.onnx"
+
+        const val UPSCALE_MODEL_URL = "https://github.com/cliecy/CManga/raw/main/assets/models/anime4k_acnet.onnx"
         
         val TapZones = listOf(
             MR.strings.label_default,
