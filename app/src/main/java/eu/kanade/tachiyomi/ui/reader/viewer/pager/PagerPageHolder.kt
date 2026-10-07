@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.pager
 
+import eu.kanade.tachiyomi.ui.reader.colorize.AiConfig
 import android.annotation.SuppressLint
 import android.content.Context
 import android.view.LayoutInflater
