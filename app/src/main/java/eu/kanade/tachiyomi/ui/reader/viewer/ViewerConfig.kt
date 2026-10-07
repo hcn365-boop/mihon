@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader.viewer
 
+import eu.kanade.tachiyomi.ui.reader.colorize.AiConfig
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -52,6 +53,8 @@ abstract class ViewerConfig(readerPreferences: ReaderPreferences, private val sc
         protected set
 
     init {
+        AiConfig.attach(readerPreferences, scope) { imagePropertyChangedListener?.invoke() }
+                
         readerPreferences.readWithLongTap
             .register({ longTapEnabled = it })
 
