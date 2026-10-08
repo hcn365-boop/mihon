@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.webtoon
 
+import eu.kanade.tachiyomi.ui.reader.colorize.AiPrefetcher
 import eu.kanade.tachiyomi.ui.reader.colorize.AiConfig
 import android.content.res.Resources
 import android.view.LayoutInflater
@@ -150,6 +151,7 @@ class WebtoonPageHolder(
                         }
                     }
                     Page.State.Ready -> setImage()
+                                page?.let { AiPrefetcher.onPageShown(context, it) }
                     is Page.State.Error -> setError(state.error)
                 }
             }
