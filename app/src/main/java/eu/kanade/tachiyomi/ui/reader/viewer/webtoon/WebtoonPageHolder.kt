@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.webtoon
 
+import eu.kanade.tachiyomi.ui.reader.colorize.AiPrefetcher
 import eu.kanade.tachiyomi.ui.reader.colorize.AiConfig
 import android.content.res.Resources
 import android.view.LayoutInflater
