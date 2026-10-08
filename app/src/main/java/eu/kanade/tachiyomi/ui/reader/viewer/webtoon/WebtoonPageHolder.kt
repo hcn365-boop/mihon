@@ -202,6 +202,7 @@ class WebtoonPageHolder(
                 Pair(source, isAnimated)
             }
             withUIContext {
+                page?.let { AiPrefetcher.onPageShown(context, it) }
                 frame.setImage(
                     source,
                     isAnimated,
