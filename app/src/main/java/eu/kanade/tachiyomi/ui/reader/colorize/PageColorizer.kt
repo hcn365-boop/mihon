@@ -171,6 +171,43 @@ object PageColorizer {
 
     // endregion
 
+        /** Background work for a page that is not on screen yet. Never throws. */
+    suspend fun prefetch(context: Context, source: BufferedSource, full: Boolean) {
+        try {
+            val app = context.applicationContext
+            if (full) processOrNull(app, source) else warmChroma(app, source)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e)
+        }
+    }
+
+    /** Runs only the colorizer model and caches its chroma, so the page is quick to color later. */
+    private suspend fun warmChroma(context: Context, source: BufferedSource) {
+        val model = modelFile(context)
+        if (!AiConfig.colorizeEnabled || model.length() == 0L) return
+        if (ImageUtil.isAnimatedAndSupported(source)) return
+        val bytes = source.peek().readByteArray()
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return
+        val pixels = bounds.outWidth.toLong() * bounds.outHeight
+        if (pixels > AiConfig.colorizeMaxPixels) return
+        if (estimateBytes(pixels, true, false) > AiConfig.memoryBudgetBytes) return
+        val chromaFile = chromaFile(context, bytes, model)
+        if (chromaFile.isFile) return
+        val original = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return
+        try {
+            if (!looksGrayscale(original)) return
+            mutex.withLock {
+                if (!chromaFile.isFile) saveChroma(chromaFile, colorizerEngine(model).predict(original))
+            }
+        } finally {
+            original.recycle()
+        }
+    }
+
     /** Samples the page. Colored covers and already-colored pages are left alone. */
     private fun looksGrayscale(bitmap: Bitmap): Boolean {
         val side = 64
