@@ -1,6 +1,5 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.webtoon
 
-import eu.kanade.tachiyomi.ui.reader.colorize.AiPrefetcher
 import eu.kanade.tachiyomi.ui.reader.colorize.AiConfig
 import android.content.res.Resources
 import android.view.LayoutInflater
@@ -125,6 +124,7 @@ class WebtoonPageHolder(
         progressIndicator.setProgress(0)
         progressContainer.isVisible = true
     }
+
     /**
      * Loads the page and processes changes to the page's status.
      *
@@ -149,21 +149,26 @@ class WebtoonPageHolder(
                             progressIndicator.setProgress(value)
                         }
                     }
-                    Page.State.Ready -> {
-                        setImage()
-                        page?.let { AiPrefetcher.onPageShown(context, it) }
-                    }
+                    Page.State.Ready -> setImage()
                     is Page.State.Error -> setError(state.error)
                 }
             }
         }
     }
 
-
     /**
      * Called when the page is queued.
      */
     private fun setQueued() {
+        progressContainer.isVisible = true
+        progressIndicator.show()
+        removeErrorLayout()
+    }
+
+    /**
+     * Called when the page is loading.
+     */
+    private fun setLoading() {
         progressContainer.isVisible = true
         progressIndicator.show()
         removeErrorLayout()
