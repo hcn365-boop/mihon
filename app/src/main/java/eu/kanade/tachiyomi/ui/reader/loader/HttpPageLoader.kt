@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader.loader
 
+import eu.kanade.tachiyomi.ui.reader.colorize.AiPrefetcher
 import eu.kanade.tachiyomi.ui.reader.colorize.AiConfig
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.database.models.toDomainChapter
@@ -198,6 +199,7 @@ internal class HttpPageLoader(
             page.downloadStream = null
             page.stream = { chapterCache.getImageFile(imageUrl).inputStream() }
             page.status = Page.State.Ready
+            AiPrefetcher.kick()
         } catch (e: Throwable) {
             page.downloadStream = null
             page.status = Page.State.Error(e)
