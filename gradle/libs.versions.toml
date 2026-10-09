@@ -53,6 +53,11 @@ kotlinx-serialization = "1.11.0"
 ktlint = "1.8.0"
 leakCanary = "2.14"
 logcat = "0.4"
+mlkit-text-recognition-latin = "19.0.1"
+mlkit-text-recognition-cjk = "16.0.1"
+# ----------------------------------
+mlkit-text-translate-version = "17.0.3"
+google-generativeai-version = "0.9.0"
 markdown = "0.45.0"
 material = "1.14.0"
 materialKolor = "5.0.1"
@@ -82,6 +87,14 @@ webgpuviewer = "51"
 xmlutil = "1.0.2"
 
 [libraries]
+# --- التعديل هنا: توجيه المكتبات إلى play-services-mlkit ---
+mlkit-text-recognition = { module = "com.google.android.gms:play-services-mlkit-text-recognition", version.ref = "mlkit-text-recognition-latin" }
+mlkit-text-recognition-chinese = { module = "com.google.android.gms:play-services-mlkit-text-recognition-chinese", version.ref = "mlkit-text-recognition-cjk" }
+mlkit-text-recognition-japanese = { module = "com.google.android.gms:play-services-mlkit-text-recognition-japanese", version.ref = "mlkit-text-recognition-cjk" }
+mlkit-text-recognition-korean = { module = "com.google.android.gms:play-services-mlkit-text-recognition-korean", version.ref = "mlkit-text-recognition-cjk" }
+# ----------------------------------------------------------
+mlkit-text-translate = { module = "com.google.mlkit:translate", version.ref = "mlkit-text-translate-version" }
+google-generativeai = { module = "com.google.ai.client.generativeai:generativeai", version.ref = "google-generativeai-version" }
 aboutLibraries-compose = { module = "com.mikepenz:aboutlibraries-compose-m3", version.ref = "aboutLibraries" }
 android-desugar = { module = "com.android.tools:desugar_jdk_libs", version.ref = "android-desugar" }
 android-gradle = { module = "com.android.tools.build:gradle", version.ref = "android-gradle" }
