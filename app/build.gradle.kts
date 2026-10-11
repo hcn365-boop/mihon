@@ -239,6 +239,9 @@ dependencies {
 
     implementation(libs.bundles.kotlinx.coroutines)
 
+    implementation(libs.kotlinx.coroutines.play.services)
+
+
     implementation(libs.kotlinx.datetime)
 
     // AndroidX libraries
