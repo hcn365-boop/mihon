@@ -1,10 +1,27 @@
 package eu.kanade.tachiyomi.ui.reader.colorize
 
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
+import eu.kanade.translation.BatchLimits
+import eu.kanade.translation.OcrMode
+import eu.kanade.translation.TranslationFont
+import eu.kanade.translation.recognizer.TextRecognizerLanguage
+import eu.kanade.translation.translator.TextTranslatorLanguage
+import eu.kanade.translation.translator.TextTranslators
+import eu.kanade.translation.translator.TranslatorSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import tachiyomi.core.common.preference.Preference
+
+/** Everything the translation stage needs, as one immutable snapshot. Null in [AiConfig] when it is off. */
+class TranslationConfig(
+    val settings: TranslatorSettings,
+    val ocrMode: OcrMode,
+    val font: TranslationFont,
+    val limits: BatchLimits,
+    /** How many pages ahead are read (OCR) and queued for translation in the background. */
+    val preload: Int,
+)
 
 /**
  * Current AI settings, readable from anywhere (page loaders, holders, background jobs)
@@ -37,8 +54,11 @@ object AiConfig {
 
     @Volatile var upscalePreload = 2
 
+    /** Translation settings, or null when translation is off. */
+    @Volatile var translation: TranslationConfig? = null
+
     val anyEnabled: Boolean
-        get() = colorizeEnabled || upscaleEnabled
+        get() = colorizeEnabled || upscaleEnabled || translation != null
 
     /**
      * Copies the preferences now and whenever they change.
@@ -65,5 +85,62 @@ object AiConfig {
         bind(prefs.pagePreloadCount, false) { pagePreload = it }
         bind(prefs.colorizePreloadCount, false) { colorizePreload = it }
         bind(prefs.upscalePreloadCount, false) { upscalePreload = it }
+
+        // Every translation setting rebuilds the whole snapshot, so it is never half updated.
+        val translationPrefs: List<Preference<*>> = listOf(
+            prefs.translateEnabled,
+            prefs.translateFrom,
+            prefs.translateTo,
+            prefs.translationEngine,
+            prefs.translationModel,
+            prefs.translationApiKey,
+            prefs.translationTemperature,
+            prefs.translationMaxTokens,
+            prefs.translationServerUrl,
+            prefs.translationOcrMode,
+            prefs.translationFont,
+            prefs.translatePagesPerRequest,
+            prefs.translateMaxChars,
+            prefs.translateMaxWaitSeconds,
+            prefs.translatePreloadCount,
+        )
+        translation = buildTranslation(prefs)
+        translationPrefs.forEach { pref ->
+            pref.changes()
+                .onEach {
+                    translation = buildTranslation(prefs)
+                    onOutputChanged()
+                }
+                .launchIn(scope)
+        }
+    }
+
+    private fun buildTranslation(prefs: ReaderPreferences): TranslationConfig? {
+        if (!prefs.translateEnabled.get()) return null
+        val from = prefs.translateFrom.get()
+        val to = prefs.translateTo.get()
+        return TranslationConfig(
+            settings = TranslatorSettings(
+                engine = TextTranslators.fromName(prefs.translationEngine.get()),
+                from = TextRecognizerLanguage.entries.firstOrNull { it.name.equals(from, ignoreCase = true) }
+                    ?: TextRecognizerLanguage.entries.first(),
+                to = TextTranslatorLanguage.entries.firstOrNull { it.name.equals(to, ignoreCase = true) }
+                    ?: TextTranslatorLanguage.entries.first(),
+                model = prefs.translationModel.get(),
+                apiKey = prefs.translationApiKey.get(),
+                temperature = prefs.translationTemperature.get().toFloatOrNull() ?: 1f,
+                maxOutputTokens = prefs.translationMaxTokens.get().toIntOrNull() ?: 8192,
+                serverUrl = prefs.translationServerUrl.get(),
+            ),
+            ocrMode = OcrMode.entries.firstOrNull { it.name.equals(prefs.translationOcrMode.get(), ignoreCase = true) }
+                ?: OcrMode.MLKIT,
+            font = TranslationFont.fromName(prefs.translationFont.get()),
+            limits = BatchLimits(
+                maxPages = prefs.translatePagesPerRequest.get().coerceAtLeast(1),
+                maxChars = prefs.translateMaxChars.get().coerceAtLeast(200),
+                maxWaitMillis = prefs.translateMaxWaitSeconds.get().coerceAtLeast(1) * 1000L,
+            ),
+            preload = prefs.translatePreloadCount.get(),
+        )
     }
 }
