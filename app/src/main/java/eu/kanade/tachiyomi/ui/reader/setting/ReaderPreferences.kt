@@ -194,6 +194,44 @@ class ReaderPreferences(
     
     // endregion
 
+        // region Translation
+
+    val translateEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_enabled", false)
+
+    // Names of the TextRecognizerLanguage / TextTranslatorLanguage entries
+    val translateFrom: Preference<String> = preferenceStore.getString("pref_translate_from", "JAPANESE")
+
+    val translateTo: Preference<String> = preferenceStore.getString("pref_translate_to", "ARABIC")
+
+    // Name of a TextTranslators entry
+    val translationEngine: Preference<String> = preferenceStore.getString("pref_translate_engine", "MLKIT")
+
+    val translationModel: Preference<String> = preferenceStore.getString("pref_translate_model", "")
+
+    val translationApiKey: Preference<String> = preferenceStore.getString("pref_translate_api_key", "")
+
+    val translationTemperature: Preference<String> = preferenceStore.getString("pref_translate_temperature", "1.0")
+
+    val translationMaxTokens: Preference<String> = preferenceStore.getString("pref_translate_max_tokens", "8192")
+
+    val translationServerUrl: Preference<String> = preferenceStore.getString("pref_translate_server_url", "")
+
+    // Name of an OcrMode entry: MLKIT, PADDLE or HYBRID
+    val translationOcrMode: Preference<String> = preferenceStore.getString("pref_translate_ocr_mode", "MLKIT")
+
+    // Name of a TranslationFont entry
+    val translationFont: Preference<String> = preferenceStore.getString("pref_translate_font", "SYSTEM")
+
+    val translatePagesPerRequest: Preference<Int> = preferenceStore.getInt("pref_translate_pages_per_request", 4)
+
+    val translateMaxChars: Preference<Int> = preferenceStore.getInt("pref_translate_max_chars", 3000)
+
+    val translateMaxWaitSeconds: Preference<Int> = preferenceStore.getInt("pref_translate_max_wait_s", 8)
+
+    val translatePreloadCount: Preference<Int> = preferenceStore.getInt("pref_translate_preload", 3)
+
+    // endregion
+
     // region Controls
 
     val readWithLongTap: Preference<Boolean> = preferenceStore.getBoolean("reader_long_tap", true)
