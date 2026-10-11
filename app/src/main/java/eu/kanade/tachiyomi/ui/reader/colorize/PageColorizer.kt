@@ -167,7 +167,6 @@ object PageColorizer {
             file.setLastModified(System.currentTimeMillis())
             return file.readBytes()
         }
-        if (estimateBytes(pixels, doColor, doUpscale) > AiConfig.memoryBudgetBytes) return null
 
         val original = decode(bytes) ?: return null
         var result: Bitmap? = null
@@ -177,6 +176,9 @@ object PageColorizer {
             val upscale = doUpscale && !original.hasAlpha()
             if (color && !looksGrayscale(original)) color = false
             if (!color && !upscale) return null
+
+            // التحقق من ميزانية الذاكرة بناءً على الحاجة الفعلية بعد فحص الصورة (تجنب الحساب الوهمي للتلوين)
+            if (estimateBytes(pixels, color, upscale) > AiConfig.memoryBudgetBytes) return null
 
             // One page at a time: keeps peak memory low and protects the ONNX sessions.
             val processed = mutex.withLock {
