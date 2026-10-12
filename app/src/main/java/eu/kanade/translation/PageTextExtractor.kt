@@ -130,7 +130,7 @@ class PageTextExtractor(
     }
 }
 
-/** Joins nearby text boxes using advanced ChapterTranslator merging logic without collision resolution. */
+
 internal object TextBlockMerger {
 
     fun merge(blocks: List<TranslationBlock>, imgWidth: Float, imgHeight: Float): MutableList<TranslationBlock> {
@@ -138,29 +138,39 @@ internal object TextBlockMerger {
 
         val filteredBlocks = blocks.filter { it.text.isNotBlank() }
         val isWebtoon = imgHeight > 2300f || imgHeight > (imgWidth * 2f)
-        val initialBlocks = filteredBlocks.toMutableList()
+        
+        // استخدام نظام العناقيد (Clustering) الآمن والسريع بدل إعادة ضبط المؤشر لمنع التعليق
+        val clusters = mutableListOf<MutableList<TranslationBlock>>()
+        val unmerged = filteredBlocks.toMutableList()
 
         val xThreshold = (2.5f * (imgWidth / 1200f).coerceAtMost(3.5f)).coerceAtLeast(1.0f)
         val yThresholdFactor = (1.6f * (imgHeight / 2000f).coerceAtMost(2.6f)).coerceAtLeast(1.0f)
 
-        var i = 0
-        while (i < initialBlocks.size) {
-            var j = i + 1
-            var merged = false
-            while (j < initialBlocks.size) {
-                if (shouldMergeTextBlock(initialBlocks[i], initialBlocks[j], xThreshold, yThresholdFactor)) {
-                    initialBlocks[i] = mergeTextBlock(initialBlocks[i], initialBlocks[j], isWebtoon)
-                    initialBlocks.removeAt(j)
-                    i = 0
-                    merged = true
-                    break
+        while (unmerged.isNotEmpty()) {
+            val cluster = mutableListOf(unmerged.removeAt(0))
+            var grew: Boolean
+            do {
+                grew = false
+                val iterator = unmerged.iterator()
+                while (iterator.hasNext()) {
+                    val next = iterator.next()
+                    // إذا كان البلوك الحالي يناسب أي بلوك داخل العنقود بناءً على الشروط الدقيقة
+                    if (cluster.any { shouldMergeTextBlock(it, next, xThreshold, yThresholdFactor) }) {
+                        cluster.add(next)
+                        iterator.remove()
+                        grew = true
+                    }
                 }
-                j++
-            }
-            if (!merged) i++
+            } while (grew)
+            clusters.add(cluster)
         }
 
-        return initialBlocks
+        // دمج عناصر كل عنقود معاً بسلام ودون استنزاف للمعالج
+        return clusters.map { cluster ->
+            cluster.drop(1).fold(cluster.first()) { merged, next ->
+                mergeTextBlock(merged, next, isWebtoon)
+            }
+        }.toMutableList()
     }
 
     private fun shouldMergeTextBlock(
@@ -250,3 +260,4 @@ internal object TextBlockMerger {
         )
     }
 }
+
