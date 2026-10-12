@@ -68,12 +68,17 @@ internal fun TranslationSection(prefs: ReaderPreferences) {
         options = TranslationFont.entries.map { it.name to it.label },
     )
 
-    TextSetting("Model name", prefs.translationModel)
-    TextSetting("API key", prefs.translationApiKey, secret = true)
-    TextSetting("Temperature", prefs.translationTemperature)
-    TextSetting("Max output tokens", prefs.translationMaxTokens)
-    TextSetting("Server address (LibreTranslate, LM Studio)", prefs.translationServerUrl)
-
+        val engineName by prefs.translationEngine.collectAsState()
+    val engine = TextTranslators.fromName(engineName)
+    if (engine == TextTranslators.GEMINI || engine == TextTranslators.OPENROUTER) {
+        TextSetting("Model name", prefs.translationModel)
+        TextSetting("API key", prefs.translationApiKey, secret = true)
+        TextSetting("Temperature", prefs.translationTemperature)
+        TextSetting("Max output tokens", prefs.translationMaxTokens)
+    }
+    if (engine == TextTranslators.LIBRETRANSLATE || engine == TextTranslators.LMSTUDIO) {
+        TextSetting("Server address", prefs.translationServerUrl)
+    }
     TSlider("Pages per request", prefs.translatePagesPerRequest, 1..10) { "$it" }
     ScaledChars("Max characters per request", prefs.translateMaxChars)
     TSlider("Wait before sending a partial request", prefs.translateMaxWaitSeconds, 1..30) { "$it s" }
