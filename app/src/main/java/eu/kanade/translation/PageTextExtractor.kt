@@ -27,10 +27,6 @@ class OcrBox(
 /**
  * Finds and merges the text of one page. It knows nothing about queues, files or chapters:
  * the caller gives it a bitmap and gets back the page's text blocks (or null if there is no text).
- *
- * The engines are passed as functions so this class does not depend on how they are built:
- * [mlKit] returns the raw ML Kit result, [paddle] returns boxes already converted to [OcrBox].
- * A mode needs its engine: MLKIT needs [mlKit], PADDLE needs [paddle], HYBRID needs both.
  */
 class PageTextExtractor(
     private val mode: OcrMode,
@@ -44,13 +40,13 @@ class PageTextExtractor(
         val boxes = when (mode) {
             OcrMode.MLKIT -> mlKitBoxes(image)
             OcrMode.PADDLE -> paddleBoxes(image)
-            // One after the other, not in parallel: both are heavy and share the CPU and memory.
             OcrMode.HYBRID -> combine(mlKitBoxes(image), paddleBoxes(image))
         }
         if (boxes.isEmpty()) return null
 
         val page = PageTranslation(imgWidth = bitmap.width.toFloat(), imgHeight = bitmap.height.toFloat())
-        page.blocks = TextBlockMerger.merge(boxes.map { it.toBlock() }, isRtl)
+        // استخدام خوارزمية الدمج المتقدمة المستفادة من ChapterTranslator بدون حل التداخل
+        page.blocks = TextBlockMerger.merge(boxes.map { it.toBlock() }, bitmap.width.toFloat(), bitmap.height.toFloat())
         return page.takeIf { it.blocks.isNotEmpty() }
     }
 
@@ -79,11 +75,6 @@ class PageTextExtractor(
         return recognize(image).filter { it.text.isNotBlank() }
     }
 
-    /**
-     * ML Kit is the base: its boxes carry the symbol size and angle the merging needs.
-     * Paddle adds boxes ML Kit missed. Where both found the same box, Paddle's text replaces
-     * ML Kit's only when it is clearly longer (ML Kit often drops characters in vertical text).
-     */
     private fun combine(primary: List<OcrBox>, secondary: List<OcrBox>): List<OcrBox> {
         val result = primary.toMutableList()
         for (box in secondary) {
@@ -109,7 +100,6 @@ class PageTextExtractor(
         return result
     }
 
-    /** Overlapping area divided by the area of the smaller box. */
     private fun overlapRatio(a: OcrBox, b: OcrBox): Float {
         val width = min(a.x + a.width, b.x + b.width) - max(a.x, b.x)
         val height = min(a.y + a.height, b.y + b.height) - max(a.y, b.y)
@@ -134,83 +124,129 @@ class PageTextExtractor(
         private const val OVERLAP_SAME_BOX = 0.5f
         private const val LONGER_TEXT_FACTOR = 1.5f
 
-        /** Languages read right to left or vertically, where the reading order of boxes is reversed. */
         fun isRtlLanguage(language: String): Boolean = language.lowercase().let {
             it.contains("ja") || it.contains("ko") || it.contains("zh") || it.contains("ar")
         }
     }
 }
 
-/** Joins nearby text boxes of one speech bubble into a single block, in reading order. */
+/** Joins nearby text boxes using advanced ChapterTranslator merging logic without collision resolution. */
 internal object TextBlockMerger {
 
-    fun merge(blocks: List<TranslationBlock>, isRtl: Boolean): MutableList<TranslationBlock> {
+    fun merge(blocks: List<TranslationBlock>, imgWidth: Float, imgHeight: Float): MutableList<TranslationBlock> {
         if (blocks.isEmpty()) return mutableListOf()
 
-        val clusters = mutableListOf<MutableList<TranslationBlock>>()
-        val unmerged = blocks.toMutableList()
-        while (unmerged.isNotEmpty()) {
-            val cluster = mutableListOf(unmerged.removeAt(0))
-            do {
-                var grew = false
-                val iterator = unmerged.iterator()
-                while (iterator.hasNext()) {
-                    val next = iterator.next()
-                    if (cluster.any { shouldMerge(it, next) }) {
-                        cluster.add(next)
-                        iterator.remove()
-                        grew = true
-                    }
+        val filteredBlocks = blocks.filter { it.text.isNotBlank() }
+        val isWebtoon = imgHeight > 2300f || imgHeight > (imgWidth * 2f)
+        val initialBlocks = filteredBlocks.toMutableList()
+
+        val xThreshold = (2.5f * (imgWidth / 1200f).coerceAtMost(3.5f)).coerceAtLeast(1.0f)
+        val yThresholdFactor = (1.6f * (imgHeight / 2000f).coerceAtMost(2.6f)).coerceAtLeast(1.0f)
+
+        var i = 0
+        while (i < initialBlocks.size) {
+            var j = i + 1
+            var merged = false
+            while (j < initialBlocks.size) {
+                if (shouldMergeTextBlock(initialBlocks[i], initialBlocks[j], xThreshold, yThresholdFactor)) {
+                    initialBlocks[i] = mergeTextBlock(initialBlocks[i], initialBlocks[j], isWebtoon)
+                    initialBlocks.removeAt(j)
+                    i = 0
+                    merged = true
+                    break
                 }
-            } while (grew)
-            clusters.add(cluster)
-        }
-
-        return clusters.map { cluster ->
-            // Manga: top to bottom, right to left. Other languages: top to bottom, left to right.
-            val sorted = if (isRtl) {
-                cluster.sortedWith(compareBy<TranslationBlock> { it.y }.thenByDescending { it.x })
-            } else {
-                cluster.sortedWith(compareBy<TranslationBlock> { it.y }.thenBy { it.x })
+                j++
             }
-            sorted.drop(1).fold(sorted.first()) { merged, next -> join(merged, next, isRtl) }
-        }.toMutableList()
-    }
-
-    private fun shouldMerge(a: TranslationBlock, b: TranslationBlock): Boolean {
-        val verticalMargin = max(a.symHeight, b.symHeight) * 1.2f
-        val horizontalMargin = max(a.symHeight, b.symHeight) * 1.5f
-        val overlapsX = b.x <= a.x + a.width + horizontalMargin && b.x + b.width >= a.x - horizontalMargin
-        val overlapsY = b.y <= a.y + a.height + verticalMargin && b.y + b.height >= a.y - verticalMargin
-        return overlapsX && overlapsY && abs(a.angle - b.angle) < 10f
-    }
-
-    private fun join(top: TranslationBlock, bottom: TranslationBlock, isRtl: Boolean): TranslationBlock {
-        val x = min(top.x, bottom.x)
-        val y = min(top.y, bottom.y)
-        val symHeight = (top.symHeight + bottom.symHeight) / 2
-
-        // On the same line the horizontal order decides; on different lines the upper block reads first.
-        val sameLine = abs(top.y - bottom.y) < symHeight
-        val topFirst = !sameLine || if (isRtl) top.x > bottom.x else top.x < bottom.x
-        fun ordered(first: String, second: String) = if (topFirst) "$first $second" else "$second $first"
-
-        val translation = if (top.translation.isNotEmpty() && bottom.translation.isNotEmpty()) {
-            ordered(top.translation, bottom.translation)
-        } else {
-            top.translation + bottom.translation
+            if (!merged) i++
         }
 
+        return initialBlocks
+    }
+
+    private fun shouldMergeTextBlock(
+        r1: TranslationBlock, r2: TranslationBlock,
+        xThreshold: Float, yThresholdFactor: Float,
+    ): Boolean {
+        val angleDiff = abs(r1.angle - r2.angle)
+        val angleSimilar = angleDiff < 15 || abs(angleDiff - 180) < 15
+        if (!angleSimilar) return false
+
+        val minSymWidth = min(r1.symWidth, r2.symWidth)
+        val maxSymWidth = max(r1.symWidth, r2.symWidth)
+        val minSymHeight = min(r1.symHeight, r2.symHeight)
+        val maxSymHeight = max(r1.symHeight, r2.symHeight)
+        val sizeRatioLimit = 3f
+        if (maxSymWidth / minSymWidth > sizeRatioLimit || maxSymHeight / minSymHeight > sizeRatioLimit) return false
+
+        val sH = max(minSymHeight, 12f)
+        val sW = max(minSymWidth, 12f)
+        val maxAllowedGapX = sW * 1.2f
+        val maxAllowedGapY = sH * 1.2f
+        val isVertical = abs(r1.angle) in 70.0..110.0
+
+        val r1Right = r1.x + r1.width; val r1Bottom = r1.y + r1.height
+        val r2Right = r2.x + r2.width; val r2Bottom = r2.y + r2.height
+
+        val yOverlap = max(0f, min(r1Bottom, r2Bottom) - max(r1.y, r2.y))
+        val xOverlap = max(0f, min(r1Right, r2Right) - max(r1.x, r2.x))
+
+        val minHeight = min(r1.height, r2.height)
+        val isFullVerticalCover = yOverlap >= (minHeight * 0.75f)
+        val minWidth = min(r1.width, r2.width)
+        val isFullHorizontalCover = xOverlap >= (minWidth * 0.95f)
+        val isInCross = isFullHorizontalCover || isFullVerticalCover
+        if (!isInCross) return false
+
+        if (isVertical) {
+            val sideGap = if (r1.x < r2.x) r2.x - r1Right else r1.x - r2Right
+            if (sideGap > maxAllowedGapX) return false
+            if (isFullVerticalCover && sideGap <= 0f) return true
+            val vertGap = if (r1.y < r2.y) r2.y - r1Bottom else r1.y - r2Bottom
+            if (vertGap > maxAllowedGapY) return false
+            val isTouchingOrClose = sideGap <= (sW * 1.2f) && vertGap <= (sH * 1.2f)
+            if (!isTouchingOrClose) return false
+            val dy = abs(r1.y - r2.y); val dx = abs(r1.x - r2.x)
+            val isOriginsClose = dy < (sH * 1.2f) && dx < (sW * 1.2f)
+            val isSideBySide = sideGap < (sW * 1.2f) && dy < (sH * 1.2f)
+            val alignedVertically = yOverlap > (sH * 0.15f)
+            val closeHorizontally = sideGap < (sW * 1.2f)
+            return isOriginsClose || isSideBySide || (closeHorizontally && alignedVertically)
+        } else {
+            val vGap = max(0f, if (r1.y < r2.y) r2.y - r1Bottom else r1.y - r2Bottom)
+            if (vGap > maxAllowedGapY) return false
+            if (isFullHorizontalCover && vGap <= maxAllowedGapY) return true
+            val sideGap = if (r1.x < r2.x) r2.x - r1Right else r1.x - r2Right
+            if (sideGap > maxAllowedGapX) return false
+            val hasHighSideOverlap = xOverlap > (minWidth * 0.70f)
+            val centerR1X = r1.x + r1.width / 2f; val centerR2X = r2.x + r2.width / 2f
+            val centersAligned = abs(centerR1X - centerR2X) < max(r1.width, r2.width) * 0.35f
+            val isTouching = vGap <= maxAllowedGapY
+            return (hasHighSideOverlap || centersAligned) && isTouching
+        }
+    }
+
+    private fun mergeTextBlock(a: TranslationBlock, b: TranslationBlock, isWebtoon: Boolean): TranslationBlock {
+        val minX = min(a.x, b.x); val minY = min(a.y, b.y)
+        val maxX = max(a.x + a.width, b.x + b.width); val maxY = max(a.y + a.height, b.y + b.height)
+        val isVertical = abs(a.angle) in 70.0..110.0
+        val ordered = if (isVertical) {
+            if (a.x > b.x) listOf(a, b) else listOf(b, a)
+        } else {
+            if (abs(a.y - b.y) > max(a.symHeight, b.symHeight) * 0.5f) {
+                if (a.y < b.y) listOf(a, b) else listOf(b, a)
+            } else {
+                if (isWebtoon) { if (a.x < b.x) listOf(a, b) else listOf(b, a) }
+                else { if (a.x > b.x) listOf(a, b) else listOf(b, a) }
+            }
+        }
+        val totalLen = (a.text.length + b.text.length).coerceAtLeast(1)
         return TranslationBlock(
-            text = ordered(top.text, bottom.text),
-            translation = translation,
-            width = max(top.x + top.width, bottom.x + bottom.width) - x,
-            height = max(top.y + top.height, bottom.y + bottom.height) - y,
-            x = x,
-            y = y,
-            symHeight = symHeight,
-            symWidth = (top.symWidth + bottom.symWidth) / 2,
-            angle = (top.angle + bottom.angle) / 2,
+            text = ordered.joinToString(" ") { it.text.trim() },
+            translation = ordered.joinToString(" ") { it.translation.trim() }.trim(),
+            width = maxX - minX, height = maxY - minY, x = minX, y = minY,
+            angle = if (a.text.length >= b.text.length) a.angle else b.angle,
+            symWidth = (a.symWidth * a.text.length + b.symWidth * b.text.length) / totalLen,
+            symHeight = (a.symHeight * a.text.length + b.symHeight * b.text.length) / totalLen,
         )
     }
 }
