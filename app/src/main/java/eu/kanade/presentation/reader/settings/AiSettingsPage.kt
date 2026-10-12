@@ -79,6 +79,8 @@ internal fun ColumnScope.AiPage(viewModel: ReaderSettingsViewModel) {
         IntSlider("Color intensity", prefs.colorizeIntensity, 0..120) { "$it%" }
     }
     CheckboxItem(label = "Upscale pages (Anime4K)", pref = prefs.upscaleEnabled)
+    
+    TranslationSection(prefs)
 
     // endregion
 
