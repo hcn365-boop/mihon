@@ -34,8 +34,18 @@ class GoogleTranslator(
         val body = response.body
         val string = body.string()
         try {
-            val jSONArray = JSONArray(string).getJSONArray(0).getJSONArray(0)
-            return jSONArray.getString(0)
+            // التعديل المدمج من الكود الثاني: المرور على جميع الجمل بدل أخذ العنصر الأول فقط
+            val rootArray = JSONArray(string)
+            val sentencesArray = rootArray.getJSONArray(0)
+            val result = StringBuilder()
+
+            for (i in 0 until sentencesArray.length()) {
+                val sentence = sentencesArray.getJSONArray(i)
+                if (!sentence.isNull(0)) {
+                    result.append(sentence.getString(0))
+                }
+            }
+            return result.toString()
         } catch (e: Exception) {
             logcat { "Image Translation Error : $e" }
         }
@@ -111,8 +121,6 @@ class GoogleTranslator(
         return result
     }
 
-
     override fun close() {
     }
-
 }
