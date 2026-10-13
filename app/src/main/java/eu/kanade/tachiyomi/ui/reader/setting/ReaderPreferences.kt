@@ -168,6 +168,13 @@ class ReaderPreferences(
 
     val colorizeIntensity: Preference<Int> = preferenceStore.getInt("pref_colorize_intensity", 120)
 
+    val colorizeAcceleration: Preference<String> = preferenceStore.getString("pref_colorize_accel", "CPU")
+
+    val upscaleAcceleration: Preference<String> = preferenceStore.getString("pref_upscale_accel", "CPU")
+
+    // 0 = let ONNX Runtime decide
+    val aiThreads: Preference<Int> = preferenceStore.getInt("pref_ai_threads", 0)
+
     val pagePreloadCount: Preference<Int> = preferenceStore.getInt("pref_page_preload", 4)
 
     val colorizeModelUrl: Preference<String> = preferenceStore.getString("pref_colorize_model_url", COLORIZE_MODEL_URL)
