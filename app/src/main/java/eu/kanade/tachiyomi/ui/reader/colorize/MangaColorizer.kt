@@ -25,8 +25,7 @@ import java.nio.FloatBuffer
  *
  * Not thread safe: call it from one coroutine at a time.
  */
-class MangaColorizer(modelFile: File) : Closeable {
-
+class MangaColorizer(modelFile: File, acceleration: Acceleration = Acceleration.CPU, threads: Int = 0) : Closeable {
     /** Predicted Lab a/b channels at 512x512, in float Lab units. About 2 MB per page. */
     class Chroma(val a: FloatArray, val b: FloatArray)
 
