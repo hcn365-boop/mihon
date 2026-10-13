@@ -374,9 +374,20 @@ object PageColorizer {
     private fun colorizerEngine(model: File): MangaColorizer {
         val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.colorizeAcceleration
         val setup = "$acceleration/${AiConfig.aiThreads}"
-        val key = "${model.absolutePath}_$setup_${model.lastModified()}"
+        // التصحيح هنا بإضافة الأقواس حول setup
+        val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
         return colorizerManager.getOrPut(key) {
             MangaColorizer(model, acceleration, AiConfig.aiThreads)
+        }
+    }
+
+    private fun upscalerEngine(model: File): Anime4kUpscaler {
+        val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
+        val setup = "$acceleration/${AiConfig.aiThreads}"
+        // التصحيح هنا أيضاً
+        val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
+        return upscalerManager.getOrPut(key) {
+            Anime4kUpscaler(model, acceleration, AiConfig.aiThreads)
         }
     }
 
