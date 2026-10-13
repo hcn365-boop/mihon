@@ -302,27 +302,38 @@ object PageColorizer {
 
     // region Engines (reloaded if the model file is replaced)
 
+    @Volatile
+    private var acceleratorFailed = false
+    private var colorizerSetup = ""
+    private var upscalerSetup = ""
+
     private fun colorizerEngine(model: File): MangaColorizer {
+        val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.colorizeAcceleration
+        val setup = "$acceleration/${AiConfig.aiThreads}"
         val stamp = model.lastModified()
         val current = colorizer
-        if (current != null && stamp == colorizerStamp) return current
+        if (current != null && stamp == colorizerStamp && setup == colorizerSetup) return current
         colorizer?.close()
         colorizer = null
-        return MangaColorizer(model).also {
+        return MangaColorizer(model, acceleration, AiConfig.aiThreads).also {
             colorizer = it
             colorizerStamp = stamp
+            colorizerSetup = setup
         }
     }
 
     private fun upscalerEngine(model: File): Anime4kUpscaler {
+        val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
+        val setup = "$acceleration/${AiConfig.aiThreads}"
         val stamp = model.lastModified()
         val current = upscaler
-        if (current != null && stamp == upscalerStamp) return current
+        if (current != null && stamp == upscalerStamp && setup == upscalerSetup) return current
         upscaler?.close()
         upscaler = null
-        return Anime4kUpscaler(model).also {
+        return Anime4kUpscaler(model, acceleration, AiConfig.aiThreads).also {
             upscaler = it
             upscalerStamp = stamp
+            upscalerSetup = setup
         }
     }
 
