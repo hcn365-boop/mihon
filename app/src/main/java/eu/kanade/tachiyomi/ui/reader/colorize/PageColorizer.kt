@@ -181,39 +181,42 @@ object PageColorizer {
             if (estimateBytes(pixels, color, upscale) > AiConfig.memoryBudgetBytes) return null
 
             // One page at a time: keeps peak memory low and protects the ONNX sessions.
-           try { val processed = mutex.withLock {
-                var page = original
-                if (color) {
-                    val colorModel = modelFile(context)
-                    val chromaFile = chromaFile(context, imageHash, colorModel)
-                    val engine = colorizerEngine(colorModel)
-                    val chroma = loadChroma(chromaFile) ?: engine.predict(original).also {
-                        runCatching { saveChroma(chromaFile, it) }
-                    }
-                    page = engine.render(original, chroma, intensity)
-                }
-                if (upscale) {
-                    val enlarged = upscalerEngine(upscalerModelFile(context)).upscale(page)
-                    if (page !== original) page.recycle()
-                    page = enlarged
-                }
-                page
-            }} catch (e: CancellationException) {
-                    throw e
-                } catch (e: Throwable) {
-                    val accelerated = (color && AiConfig.colorizeAcceleration != Acceleration.CPU) ||
-                        (upscale && AiConfig.upscaleAcceleration != Acceleration.CPU)
-                    if (accelerated && !acceleratorFailed) {
-                        // The accelerator failed: use the CPU from now on (until the app is restarted).
-                        acceleratorFailed = true
-                        colorizer?.close()
-                        colorizer = null
-                        upscaler?.close()
-                        upscaler = null
-                    }
-                    throw e
+           val processed = try {
+    mutex.withLock {
+        var page = original
+        if (color) {
+            val colorModel = modelFile(context)
+            val chromaFile = chromaFile(context, imageHash, colorModel)
+            val engine = colorizerEngine(colorModel)
+            val chroma = loadChroma(chromaFile) ?: engine.predict(original).also {
+                runCatching { saveChroma(chromaFile, it) }
+            }
+            page = engine.render(original, chroma, intensity)
         }
-            result = processed
+        if (upscale) {
+            val enlarged = upscalerEngine(upscalerModelFile(context)).upscale(page)
+            if (page !== original) page.recycle()
+            page = enlarged
+        }
+        page
+    }
+} catch (e: CancellationException) {
+    throw e
+} catch (e: Throwable) {
+    val accelerated = (color && AiConfig.colorizeAcceleration != Acceleration.CPU) ||
+        (upscale && AiConfig.upscaleAcceleration != Acceleration.CPU)
+    if (accelerated && !acceleratorFailed) {
+        // The accelerator failed: use the CPU from now on (until the app is restarted).
+        acceleratorFailed = true
+        colorizer?.close()
+        colorizer = null
+        upscaler?.close()
+        upscaler = null
+    }
+    throw e
+}
+result = processed
+            
             val encoded = encode(processed, original.hasAlpha())
             runCatching { saveCachedPage(file, encoded) }
             return encoded
