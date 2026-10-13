@@ -14,6 +14,7 @@ import okio.BufferedSource
 import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
 import java.io.ByteArrayOutputStream
+import java.io.Closeable
 import java.io.File
 import java.security.MessageDigest
 import kotlin.coroutines.cancellation.CancellationException
@@ -44,10 +45,55 @@ object PageColorizer {
     private const val JPEG_QUALITY = 95
 
     private val mutex = Mutex()
-    private var colorizer: MangaColorizer? = null
-    private var colorizerStamp = 0L
-    private var upscaler: Anime4kUpscaler? = null
-    private var upscalerStamp = 0L
+
+    /**
+     * مدير جلسات محركات الذكاء الاصطناعي (مستوحى من تصميم ModelManager لمنع تسريب Native Memory وتجنب SIGSEGV).
+     * يحافظ على حد أقصى من الجلسات النشطة ويغلق القديمة تلقائياً لتفريغ الذاكرة الأصلية.
+     */
+    private class EngineManager<T : Closeable>(private val maxEntries: Int = 2) {
+        private val sessions = object : LinkedHashMap<String, T>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, T>): Boolean {
+                if (size > maxEntries) {
+                    try {
+                        eldest.value.close()
+                    } catch (_: Throwable) {}
+                    return true
+                }
+                return false
+            }
+        }
+
+        fun getOrPut(key: String, factory: () -> T): T {
+            synchronized(sessions) {
+                sessions[key]?.let { return it }
+                val instance = factory()
+                sessions[key] = instance
+                while (sessions.size > maxEntries) {
+                    val iterator = sessions.entries.iterator()
+                    if (iterator.hasNext()) {
+                        val entry = iterator.next()
+                        try {
+                            entry.value.close()
+                        } catch (_: Throwable) {}
+                        iterator.remove()
+                    }
+                }
+                return instance
+            }
+        }
+
+        fun reset() {
+            synchronized(sessions) {
+                sessions.values.forEach {
+                    try { it.close() } catch (_: Throwable) {}
+                }
+                sessions.clear()
+            }
+        }
+    }
+
+    private val colorizerManager = EngineManager<MangaColorizer>(maxEntries = 1)
+    private val upscalerManager = EngineManager<Anime4kUpscaler>(maxEntries = 1)
 
     fun modelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), COLORIZER_FILE)
 
@@ -56,6 +102,12 @@ object PageColorizer {
     fun isModelInstalled(context: Context): Boolean = modelFile(context).length() > 0
 
     fun isUpscalerInstalled(context: Context): Boolean = upscalerModelFile(context).length() > 0
+
+    /** تفريغ جميع المحركات وإغلاق جلساتها يدوياً عند الخروج أو تغيير الفصول لتنظيف الذاكرة بالكامل. */
+    fun releaseEngines() {
+        colorizerManager.reset()
+        upscalerManager.reset()
+    }
 
     /** Kept for the existing callers: the intensity now comes from [AiConfig]. */
     suspend fun colorize(context: Context, source: BufferedSource, intensity: Float): BufferedSource =
@@ -181,42 +233,39 @@ object PageColorizer {
             if (estimateBytes(pixels, color, upscale) > AiConfig.memoryBudgetBytes) return null
 
             // One page at a time: keeps peak memory low and protects the ONNX sessions.
-           val processed = try {
-    mutex.withLock {
-        var page = original
-        if (color) {
-            val colorModel = modelFile(context)
-            val chromaFile = chromaFile(context, imageHash, colorModel)
-            val engine = colorizerEngine(colorModel)
-            val chroma = loadChroma(chromaFile) ?: engine.predict(original).also {
-                runCatching { saveChroma(chromaFile, it) }
+            val processed = try {
+                mutex.withLock {
+                    var page = original
+                    if (color) {
+                        val colorModel = modelFile(context)
+                        val chromaFile = chromaFile(context, imageHash, colorModel)
+                        val engine = colorizerEngine(colorModel)
+                        val chroma = loadChroma(chromaFile) ?: engine.predict(original).also {
+                            runCatching { saveChroma(chromaFile, it) }
+                        }
+                        page = engine.render(original, chroma, intensity)
+                    }
+                    if (upscale) {
+                        val enlarged = upscalerEngine(upscalerModelFile(context)).upscale(page)
+                        if (page !== original) page.recycle()
+                        page = enlarged
+                    }
+                    page
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                val accelerated = (color && AiConfig.colorizeAcceleration != Acceleration.CPU) ||
+                    (upscale && AiConfig.upscaleAcceleration != Acceleration.CPU)
+                if (accelerated && !acceleratorFailed) {
+                    // The accelerator failed: use the CPU from now on (until the app is restarted).
+                    acceleratorFailed = true
+                    releaseEngines()
+                }
+                throw e
             }
-            page = engine.render(original, chroma, intensity)
-        }
-        if (upscale) {
-            val enlarged = upscalerEngine(upscalerModelFile(context)).upscale(page)
-            if (page !== original) page.recycle()
-            page = enlarged
-        }
-        page
-    }
-} catch (e: CancellationException) {
-    throw e
-} catch (e: Throwable) {
-    val accelerated = (color && AiConfig.colorizeAcceleration != Acceleration.CPU) ||
-        (upscale && AiConfig.upscaleAcceleration != Acceleration.CPU)
-    if (accelerated && !acceleratorFailed) {
-        // The accelerator failed: use the CPU from now on (until the app is restarted).
-        acceleratorFailed = true
-        colorizer?.close()
-        colorizer = null
-        upscaler?.close()
-        upscaler = null
-    }
-    throw e
-}
-result = processed
-            
+            result = processed
+
             val encoded = encode(processed, original.hasAlpha())
             runCatching { saveCachedPage(file, encoded) }
             return encoded
@@ -317,40 +366,26 @@ result = processed
         return output.toByteArray()
     }
 
-    // region Engines (reloaded if the model file is replaced)
+    // region Engines (managed securely via EngineManager)
 
     @Volatile
     private var acceleratorFailed = false
-    private var colorizerSetup = ""
-    private var upscalerSetup = ""
 
     private fun colorizerEngine(model: File): MangaColorizer {
         val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.colorizeAcceleration
         val setup = "$acceleration/${AiConfig.aiThreads}"
-        val stamp = model.lastModified()
-        val current = colorizer
-        if (current != null && stamp == colorizerStamp && setup == colorizerSetup) return current
-        colorizer?.close()
-        colorizer = null
-        return MangaColorizer(model, acceleration, AiConfig.aiThreads).also {
-            colorizer = it
-            colorizerStamp = stamp
-            colorizerSetup = setup
+        val key = "${model.absolutePath}_$setup_${model.lastModified()}"
+        return colorizerManager.getOrPut(key) {
+            MangaColorizer(model, acceleration, AiConfig.aiThreads)
         }
     }
 
     private fun upscalerEngine(model: File): Anime4kUpscaler {
         val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
         val setup = "$acceleration/${AiConfig.aiThreads}"
-        val stamp = model.lastModified()
-        val current = upscaler
-        if (current != null && stamp == upscalerStamp && setup == upscalerSetup) return current
-        upscaler?.close()
-        upscaler = null
-        return Anime4kUpscaler(model, acceleration, AiConfig.aiThreads).also {
-            upscaler = it
-            upscalerStamp = stamp
-            upscalerSetup = setup
+        val key = "${model.absolutePath}_$setup_${model.lastModified()}"
+        return upscalerManager.getOrPut(key) {
+            Anime4kUpscaler(model, acceleration, AiConfig.aiThreads)
         }
     }
 
