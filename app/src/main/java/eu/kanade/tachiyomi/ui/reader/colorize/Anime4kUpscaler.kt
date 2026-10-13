@@ -39,7 +39,7 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
 
     init {
         check(OpenCVLoader.initLocal()) { "OpenCV native library failed to load" }
-        session = env.createSession(modelFile.absolutePath, OrtSession.SessionOptions())
+        session = OrtSessions.create(env, modelFile.absolutePath, acceleration, threads)
         spec = try {
             inspect(session)
         } catch (e: Throwable) {
