@@ -23,8 +23,8 @@ import java.nio.FloatBuffer
  * The page is processed in overlapping tiles, so memory stays small whatever the page size.
  * The result is opaque (alpha is not preserved). Not thread safe: use it from one coroutine at a time.
  */
-class Anime4kUpscaler(modelFile: File) : Closeable {
-
+class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration.CPU, threads: Int = 0) : Closeable {
+    
     private class Spec(val inputName: String, val tileWidth: Int, val tileHeight: Int, val scale: Int)
 
     private class TileResult(val shape: LongArray, val values: FloatArray)
