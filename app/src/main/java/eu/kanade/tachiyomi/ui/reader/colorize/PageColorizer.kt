@@ -391,15 +391,6 @@ object PageColorizer {
         }
     }
 
-    private fun upscalerEngine(model: File): Anime4kUpscaler {
-        val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
-        val setup = "$acceleration/${AiConfig.aiThreads}"
-        val key = "${model.absolutePath}_$setup_${model.lastModified()}"
-        return upscalerManager.getOrPut(key) {
-            Anime4kUpscaler(model, acceleration, AiConfig.aiThreads)
-        }
-    }
-
     // endregion
 
     /** Samples the page. Colored covers and already-colored pages are left alone. */
