@@ -36,6 +36,12 @@ object AiConfig {
 
     @Volatile var upscaleEnabled = false
 
+    @Volatile var colorizeAcceleration = Acceleration.CPU
+
+    @Volatile var upscaleAcceleration = Acceleration.CPU
+
+    @Volatile var aiThreads = 0
+
     @Volatile var colorizeMaxPixels = 12_000_000L
 
     @Volatile var upscaleMaxPixels = 3_000_000L
@@ -78,6 +84,9 @@ object AiConfig {
         bind(prefs.colorizeEnabled, true) { colorizeEnabled = it }
         bind(prefs.colorizeIntensity, true) { colorizeIntensity = it / 100f }
         bind(prefs.upscaleEnabled, true) { upscaleEnabled = it }
+        bind(prefs.colorizeAcceleration, false) { colorizeAcceleration = Acceleration.fromName(it) }
+        bind(prefs.upscaleAcceleration, false) { upscaleAcceleration = Acceleration.fromName(it) }
+        bind(prefs.aiThreads, false) { aiThreads = it }
         bind(prefs.colorizeMaxMegapixels, true) { colorizeMaxPixels = it * 1_000_000L }
         bind(prefs.upscaleMaxMegapixels, true) { upscaleMaxPixels = it * 1_000_000L }
         bind(prefs.aiMemoryBudgetMb, false) { memoryBudgetBytes = it * 1024L * 1024 }
