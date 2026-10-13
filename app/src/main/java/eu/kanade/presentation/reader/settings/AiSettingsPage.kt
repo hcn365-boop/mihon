@@ -111,6 +111,8 @@ internal fun ColumnScope.AiPage(viewModel: ReaderSettingsViewModel) {
 
     // endregion
 
+    AccelerationSection(prefs)
+
     // region Limits
 
     IntSlider("Colorize: largest page", prefs.colorizeMaxMegapixels, 1..40) { "$it MP" }
