@@ -36,6 +36,14 @@ object AiConfig {
 
     @Volatile var upscaleEnabled = false
 
+    @Volatile var upscaleNormalizeEnabled = false
+
+    @Volatile var upscaleNormalizeSide = 1080
+
+    /** Short side (pixels) big pages are shrunk to before upscaling, or 0 when this is off. */
+    val normalizeSide: Int
+        get() = if (upscaleNormalizeEnabled) upscaleNormalizeSide else 0
+
     @Volatile var colorizeAcceleration = Acceleration.CPU
 
     @Volatile var upscaleAcceleration = Acceleration.CPU
@@ -84,6 +92,8 @@ object AiConfig {
         bind(prefs.colorizeEnabled, true) { colorizeEnabled = it }
         bind(prefs.colorizeIntensity, true) { colorizeIntensity = it / 100f }
         bind(prefs.upscaleEnabled, true) { upscaleEnabled = it }
+        bind(prefs.upscaleNormalizeEnabled, true) { upscaleNormalizeEnabled = it }
+        bind(prefs.upscaleNormalizeShortSide, true) { upscaleNormalizeSide = it }
         bind(prefs.colorizeAcceleration, false) { colorizeAcceleration = Acceleration.fromName(it) }
         bind(prefs.upscaleAcceleration, false) { upscaleAcceleration = Acceleration.fromName(it) }
         bind(prefs.aiThreads, false) { aiThreads = it }
