@@ -51,6 +51,12 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
     }
 
         fun upscale(input: Bitmap, maxShortSide: Int = 0): Bitmap = Mats().use { m ->
+        val rgba = m.mat()
+        toMat(input, rgba)
+        val rgb = m.mat()
+        Imgproc.cvtColor(rgba, rgb, Imgproc.COLOR_RGBA2RGB)
+        val ycrcb = m.mat()
+        Imgproc.cvtColor(rgb, ycrcb, Imgproc.COLOR_RGB2YCrCb)
 
         if (maxShortSide > 0) {
             val shortSide = min(rgb.cols(), rgb.rows())
@@ -63,13 +69,6 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
                 Imgproc.resize(rgb, rgb, newSize, 0.0, 0.0, Imgproc.INTER_AREA)
             }
         }
-            
-        val rgba = m.mat()
-        toMat(input, rgba)
-        val rgb = m.mat()
-        Imgproc.cvtColor(rgba, rgb, Imgproc.COLOR_RGBA2RGB)
-        val ycrcb = m.mat()
-        Imgproc.cvtColor(rgb, ycrcb, Imgproc.COLOR_RGB2YCrCb)
 
         val luma = m.mat()
         Core.extractChannel(ycrcb, luma, 0)
