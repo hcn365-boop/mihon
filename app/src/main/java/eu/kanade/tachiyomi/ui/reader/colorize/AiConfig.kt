@@ -9,8 +9,13 @@ import eu.kanade.translation.translator.TextTranslatorLanguage
 import eu.kanade.translation.translator.TextTranslators
 import eu.kanade.translation.translator.TranslatorSettings
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.Preference
 
 /** Everything the translation stage needs, as one immutable snapshot. Null in [AiConfig] when it is off. */
@@ -54,6 +59,13 @@ object AiConfig {
 
     @Volatile var upscaleMaxPixels = 3_000_000L
 
+    /**
+     * Hard cap on the upscaled output size, in pixels. Pages whose upscaled result would exceed
+     * this are scaled back down before being cached. Bound to a preference in [attach] when one
+     * exists; the default keeps upscaled pages at a sane size.
+     */
+    @Volatile var upscaleMaxOutputPixels = 12_000_000L
+
     /** Estimated memory one page may need while being processed. Bigger pages are left as they are. */
     @Volatile var memoryBudgetBytes = 1024L * 1024 * 1024
 
@@ -77,14 +89,31 @@ object AiConfig {
     /**
      * Copies the preferences now and whenever they change.
      * [onOutputChanged] runs after a change that alters how pages look, so the viewer can reload them.
+     *
+     * The first value of a flow is not a change, and several changes can come together.
+     * Reloading pages too often while their images are being opened can crash the viewer,
+     * so initial emissions are dropped, duplicates ignored, and output-affecting changes
+     * are coalesced into a single delayed reload.
      */
     fun attach(prefs: ReaderPreferences, scope: CoroutineScope, onOutputChanged: () -> Unit) {
+        // Coalesce bursts of output-affecting changes into one reload, 600 ms after the last one.
+        var pending: Job? = null
+        fun notifyChanged() {
+            pending?.cancel()
+            pending = scope.launch {
+                delay(600)
+                onOutputChanged()
+            }
+        }
+
         fun <T> bind(pref: Preference<T>, affectsOutput: Boolean, assign: (T) -> Unit) {
             assign(pref.get())
             pref.changes()
+                .distinctUntilChanged()
+                .drop(1)
                 .onEach {
                     assign(it)
-                    if (affectsOutput) onOutputChanged()
+                    if (affectsOutput) notifyChanged()
                 }
                 .launchIn(scope)
         }
@@ -126,9 +155,11 @@ object AiConfig {
         translation = buildTranslation(prefs)
         translationPrefs.forEach { pref ->
             pref.changes()
+                .distinctUntilChanged()
+                .drop(1)
                 .onEach {
                     translation = buildTranslation(prefs)
-                    onOutputChanged()
+                    notifyChanged()
                 }
                 .launchIn(scope)
         }
