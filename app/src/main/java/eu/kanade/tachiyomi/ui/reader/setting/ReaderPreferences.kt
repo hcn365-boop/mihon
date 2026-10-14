@@ -180,6 +180,12 @@ class ReaderPreferences(
     val colorizeModelUrl: Preference<String> = preferenceStore.getString("pref_colorize_model_url", COLORIZE_MODEL_URL)
 
     val upscaleEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_upscale_enabled", false)
+    
+    // Shrink big pages before upscaling: many sites enlarge small scans, so the extra pixels carry no detail
+        
+    val upscaleNormalizeEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_upscale_normalize", false)
+
+    val upscaleNormalizeShortSide: Preference<Int> = preferenceStore.getInt("pref_upscale_normalize_side", 1080)
 
     val upscaleModelUrl: Preference<String> = preferenceStore.getString("pref_upscale_model_url", UPSCALE_MODEL_URL)
 
