@@ -163,7 +163,8 @@ object PageColorizer {
         val wantColor = AiConfig.colorizeEnabled && intensity > 0f && colorModel.length() > 0
         val wantUpscale = AiConfig.upscaleEnabled && upscaleModel.length() > 0
         val translation = if (translate) AiConfig.translation else null
-        if (!wantColor && !wantUpscale && translation == null) return null
+        val wantShrink = AiConfig.normalizeSide > 0
+        if (!wantColor && !wantUpscale && !wantShrink && translation == null) return null
         if (ImageUtil.isAnimatedAndSupported(source)) return null
 
         val bytes = source.peek().readByteArray()
@@ -182,11 +183,13 @@ object PageColorizer {
             pixels
         }
         val doUpscale = wantUpscale && upscaleInputPixels <= AiConfig.upscaleMaxPixels
+        val doShrink = normalize in 1 until shortSide
         val translationConfig = translation?.takeIf { pixels <= AiConfig.colorizeMaxPixels }
-        if (!doColor && !doUpscale && translationConfig == null) return null
+        if (!doColor && !doUpscale && !doShrink && translationConfig == null) return null
 
         val imageHash = hash(bytes)
-        val baseName = baseName(imageHash, if (doColor) intensity else -1f, doUpscale, colorModel, upscaleModel)
+        val shrinkSide = if (doShrink) normalize else 0
+        val baseName = baseName(imageHash, if (doColor) intensity else -1f, doUpscale, shrinkSide, colorModel, upscaleModel)
         val finalName = translationConfig?.let { config ->
             val s = config.settings
             val key = TranslationStore.key(s.from.name, s.to.name, s.engine.name, s.model, config.ocrMode.name, config.font.name)
@@ -196,8 +199,8 @@ object PageColorizer {
         // A page finished before is read straight from disk.
         if (display && finalName != null) readCachedPage(cacheFile(context, finalName))?.let { return it }
 
-        val base = if (doColor || doUpscale) {
-            baseImage(context, bytes, imageHash, baseName, doColor, doUpscale, intensity, pixels)
+        val base = if (doColor || doUpscale || doShrink) {
+            baseImage(context, bytes, imageHash, baseName, doColor, doUpscale, shrinkSide, intensity, pixels)
         } else {
             null
         }
@@ -221,11 +224,6 @@ object PageColorizer {
             ?: base?.let { Buffer().write(it) }
     }
 
-    /**
-     * Colorized and upscaled page, without text. Read from the cache or built (and cached).
-     * The per-page lock stops two jobs (display + prefetch) from building the same page
-     * at once and overwriting each other's temp file.
-     */
     private suspend fun baseImage(
         context: Context,
         bytes: ByteArray,
@@ -233,26 +231,7 @@ object PageColorizer {
         baseName: String,
         doColor: Boolean,
         doUpscale: Boolean,
-        intensity: Float,
-        pixels: Long,
-    ): ByteArray? = pageLock(baseName).withLock {
-        // Another job may have finished this page while this one was waiting.
-        val file = cacheFile(context, baseName)
-        if (file.isFile && file.length() > 0L) {
-            file.readBytes()
-        } else {
-            buildBaseImage(context, bytes, imageHash, baseName, doColor, doUpscale, intensity, pixels)
-        }
-    }
-
-    /** Builds the base image under the per-page lock held by [baseImage]. */
-    private suspend fun buildBaseImage(
-        context: Context,
-        bytes: ByteArray,
-        imageHash: String,
-        baseName: String,
-        doColor: Boolean,
-        doUpscale: Boolean,
+        shrinkSide: Int,
         intensity: Float,
         pixels: Long,
     ): ByteArray? {
@@ -263,46 +242,46 @@ object PageColorizer {
         }
 
         val original = decode(bytes) ?: return null
+        // Many sites enlarge small scans: shrinking them back first removes the empty pixels.
+        val working = if (shrinkSide > 0) PageResizer.shrink(original, shrinkSide) else original
         var result: Bitmap? = null
         try {
             var color = doColor
             // The upscaler output is opaque, so pages with transparency are not upscaled.
             val upscale = doUpscale && !original.hasAlpha()
-            if (color && !looksGrayscale(original)) color = false
-            if (!color && !upscale) return null
-
-            // التحقق من ميزانية الذاكرة بناءً على الحاجة الفعلية بعد فحص الصورة (تجنب الحساب الوهمي للتلوين)
+            if (color && !looksGrayscale(working)) color = false
+            if (!color && !upscale && working === original) return null
             if (estimateBytes(pixels, color, upscale) > AiConfig.memoryBudgetBytes) return null
 
             // One page at a time: keeps peak memory low and protects the ONNX sessions.
             val processed = try {
                 mutex.withLock {
-                    var page = original
+                    var page = working
                     if (color) {
                         val colorModel = modelFile(context)
                         val chromaFile = chromaFile(context, imageHash, colorModel)
                         val engine = colorizerEngine(colorModel)
-                        val chroma = loadChroma(chromaFile) ?: engine.predict(original).also {
+                        val chroma = loadChroma(chromaFile) ?: engine.predict(working).also {
                             runCatching { saveChroma(chromaFile, it) }
                         }
-                        page = engine.render(original, chroma, intensity)
+                        page = engine.render(working, chroma, intensity)
                     }
                     if (upscale) {
-                        // التصغير الفعلي إلى normalizeSide يجب أن يحدث هنا أيضاً، لا في حساب الحجم فقط
-                        var enlarged = upscalerEngine(upscalerModelFile(context)).upscale(page, AiConfig.normalizeSide)
-
-                        // سقف صلب لحجم الناتج: صفحات مكبّرة إلى 29 ميغابكسل كانت تتسبب بانهيارات
-                        val outPixels = enlarged.width.toLong() * enlarged.height
-                        if (outPixels > AiConfig.upscaleMaxOutputPixels) {
-                            val scale = sqrt(AiConfig.upscaleMaxOutputPixels.toDouble() / outPixels)
-                            val w = (enlarged.width * scale).toInt().coerceAtLeast(1)
-                            val h = (enlarged.height * scale).toInt().coerceAtLeast(1)
-                            val scaled = Bitmap.createScaledBitmap(enlarged, w, h, true)
-                            if (enlarged !== page) enlarged.recycle()
-                            enlarged = scaled
+                        var enlarged = upscalerEngine(upscalerModelFile(context)).upscale(page)
+                        if (page !== working) page.recycle()
+                        // A result that is too big is scaled down: the viewer needs a full buffer per page.
+                        val outputPixels = enlarged.width.toLong() * enlarged.height
+                        if (outputPixels > AiConfig.upscaleMaxOutputPixels) {
+                            val ratio = sqrt(AiConfig.upscaleMaxOutputPixels.toDouble() / outputPixels)
+                            val smaller = Bitmap.createScaledBitmap(
+                                enlarged,
+                                (enlarged.width * ratio).roundToInt().coerceAtLeast(1),
+                                (enlarged.height * ratio).roundToInt().coerceAtLeast(1),
+                                true,
+                            )
+                            if (smaller !== enlarged) enlarged.recycle()
+                            enlarged = smaller
                         }
-
-                        if (page !== original) page.recycle()
                         page = enlarged
                     }
                     page
@@ -314,7 +293,6 @@ object PageColorizer {
                     (upscale && AiConfig.upscaleAcceleration != Acceleration.CPU)
                 if (accelerated && !acceleratorFailed) {
                     // The accelerator failed: use the CPU from now on (until the app is restarted).
-                    // Inside the lock: no session may be in use while it is being closed.
                     acceleratorFailed = true
                     mutex.withLock { releaseEngines() }
                 }
@@ -327,6 +305,7 @@ object PageColorizer {
             return encoded
         } finally {
             result?.recycle()
+            if (working !== original) working.recycle()
             original.recycle()
         }
     }
@@ -472,16 +451,18 @@ object PageColorizer {
     private fun hash(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
-    private fun baseName(imageHash: String, intensity: Float, upscale: Boolean, colorModel: File, upscaleModel: File): String {
+    private fun baseName(
+        imageHash: String,
+        intensity: Float,
+        upscale: Boolean,
+        shrinkSide: Int,
+        colorModel: File,
+        upscaleModel: File,
+    ): String {
         val color = if (intensity < 0f) "n" else (intensity * 100).roundToInt().toString()
         // upscaleMaxOutputPixels في اسم الملف حتى لا تُقرأ صور ضخمة قديمة من الكاش بعد تغيير السقف
-        val upscaleStamp = if (upscale) {
-            "${upscaleModel.length()}_${AiConfig.upscaleMaxOutputPixels / 1_000_000}_n${AiConfig.normalizeSide}"
-        } else {
-            "n"
-        }
-
-        return "${imageHash}_c${color}_${colorModel.length()}_u$upscaleStamp"
+        val upscaleStamp = if (upscale) "${upscaleModel.length()}_${AiConfig.upscaleMaxOutputPixels / 1_000_000}" else "n"
+        return "${imageHash}_c${color}_${colorModel.length()}_u${upscaleStamp}_s$shrinkSide"
     }
 
     private fun cacheFile(context: Context, name: String): File = File(File(context.cacheDir, PAGE_CACHE_DIR), name)
