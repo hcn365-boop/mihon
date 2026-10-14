@@ -19,6 +19,7 @@ import java.io.File
 import java.security.MessageDigest
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 
 /**
@@ -46,6 +47,11 @@ object PageColorizer {
     private const val JPEG_QUALITY = 95
 
     private val mutex = Mutex()
+
+    // One lock per page name (shared between a few names), so the same page is never built twice at once
+    private val pageLocks = Array(16) { Mutex() }
+
+    private fun pageLock(name: String): Mutex = pageLocks[(name.hashCode() and Int.MAX_VALUE) % pageLocks.size]
 
     /**
      * مدير جلسات محركات الذكاء الاصطناعي (مستوحى من تصميم ModelManager لمنع تسريب Native Memory وتجنب SIGSEGV).
@@ -104,7 +110,10 @@ object PageColorizer {
 
     fun isUpscalerInstalled(context: Context): Boolean = upscalerModelFile(context).length() > 0
 
-    /** تفريغ جميع المحركات وإغلاق جلساتها يدوياً عند الخروج أو تغيير الفصول لتنظيف الذاكرة بالكامل. */
+    /**
+     * تفريغ جميع المحركات وإغلاق جلساتها يدوياً عند الخروج أو تغيير الفصول لتنظيف الذاكرة بالكامل.
+     * لا تستدعِها أثناء معالجة صفحة: الداخلية الوحيدة الآمنة هي عبر [mutex] (انظر baseImage).
+     */
     fun releaseEngines() {
         colorizerManager.reset()
         upscalerManager.reset()
@@ -212,8 +221,32 @@ object PageColorizer {
             ?: base?.let { Buffer().write(it) }
     }
 
-    /** Colorized and upscaled page, without text. Read from the cache or built (and cached). */
+    /**
+     * Colorized and upscaled page, without text. Read from the cache or built (and cached).
+     * The per-page lock stops two jobs (display + prefetch) from building the same page
+     * at once and overwriting each other's temp file.
+     */
     private suspend fun baseImage(
+        context: Context,
+        bytes: ByteArray,
+        imageHash: String,
+        baseName: String,
+        doColor: Boolean,
+        doUpscale: Boolean,
+        intensity: Float,
+        pixels: Long,
+    ): ByteArray? = pageLock(baseName).withLock {
+        // Another job may have finished this page while this one was waiting.
+        val file = cacheFile(context, baseName)
+        if (file.isFile && file.length() > 0L) {
+            file.readBytes()
+        } else {
+            buildBaseImage(context, bytes, imageHash, baseName, doColor, doUpscale, intensity, pixels)
+        }
+    }
+
+    /** Builds the base image under the per-page lock held by [baseImage]. */
+    private suspend fun buildBaseImage(
         context: Context,
         bytes: ByteArray,
         imageHash: String,
@@ -255,7 +288,20 @@ object PageColorizer {
                         page = engine.render(original, chroma, intensity)
                     }
                     if (upscale) {
-                        val enlarged = upscalerEngine(upscalerModelFile(context)).upscale(page)
+                        // التصغير الفعلي إلى normalizeSide يجب أن يحدث هنا أيضاً، لا في حساب الحجم فقط
+                        var enlarged = upscalerEngine(upscalerModelFile(context)).upscale(page, AiConfig.normalizeSide)
+
+                        // سقف صلب لحجم الناتج: صفحات مكبّرة إلى 29 ميغابكسل كانت تتسبب بانهيارات
+                        val outPixels = enlarged.width.toLong() * enlarged.height
+                        if (outPixels > AiConfig.upscaleMaxOutputPixels) {
+                            val scale = sqrt(AiConfig.upscaleMaxOutputPixels.toDouble() / outPixels)
+                            val w = (enlarged.width * scale).toInt().coerceAtLeast(1)
+                            val h = (enlarged.height * scale).toInt().coerceAtLeast(1)
+                            val scaled = Bitmap.createScaledBitmap(enlarged, w, h, true)
+                            if (enlarged !== page) enlarged.recycle()
+                            enlarged = scaled
+                        }
+
                         if (page !== original) page.recycle()
                         page = enlarged
                     }
@@ -268,8 +314,9 @@ object PageColorizer {
                     (upscale && AiConfig.upscaleAcceleration != Acceleration.CPU)
                 if (accelerated && !acceleratorFailed) {
                     // The accelerator failed: use the CPU from now on (until the app is restarted).
+                    // Inside the lock: no session may be in use while it is being closed.
                     acceleratorFailed = true
-                    releaseEngines()
+                    mutex.withLock { releaseEngines() }
                 }
                 throw e
             }
@@ -383,7 +430,6 @@ object PageColorizer {
     private fun colorizerEngine(model: File): MangaColorizer {
         val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.colorizeAcceleration
         val setup = "$acceleration/${AiConfig.aiThreads}"
-        // التصحيح هنا بإضافة الأقواس حول setup
         val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
         return colorizerManager.getOrPut(key) {
             MangaColorizer(model, acceleration, AiConfig.aiThreads)
@@ -393,7 +439,6 @@ object PageColorizer {
     private fun upscalerEngine(model: File): Anime4kUpscaler {
         val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
         val setup = "$acceleration/${AiConfig.aiThreads}"
-        // التصحيح هنا أيضاً
         val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
         return upscalerManager.getOrPut(key) {
             Anime4kUpscaler(model, acceleration, AiConfig.aiThreads)
@@ -429,11 +474,12 @@ object PageColorizer {
 
     private fun baseName(imageHash: String, intensity: Float, upscale: Boolean, colorModel: File, upscaleModel: File): String {
         val color = if (intensity < 0f) "n" else (intensity * 100).roundToInt().toString()
-                val upscaleStamp = if (upscale) {
-    "${upscaleModel.length()}_${AiConfig.upscaleMaxPixels / 1_000_000}_n${AiConfig.normalizeSide}"
-} else {
-    "n"
-}
+        // upscaleMaxOutputPixels في اسم الملف حتى لا تُقرأ صور ضخمة قديمة من الكاش بعد تغيير السقف
+        val upscaleStamp = if (upscale) {
+            "${upscaleModel.length()}_${AiConfig.upscaleMaxOutputPixels / 1_000_000}_n${AiConfig.normalizeSide}"
+        } else {
+            "n"
+        }
 
         return "${imageHash}_c${color}_${colorModel.length()}_u$upscaleStamp"
     }
@@ -449,7 +495,8 @@ object PageColorizer {
     private fun saveCachedPage(file: File, data: ByteArray) {
         val dir = file.parentFile ?: return
         dir.mkdirs()
-        val temp = File(dir, file.name + ".tmp")
+        // اسم مؤقت فريد حتى لا يكتب مساران في الملف نفسه معاً ويتلفا الناتج
+        val temp = File(dir, "${file.name}.${System.nanoTime()}.tmp")
         temp.writeBytes(data)
         temp.renameTo(file)
         trimCache(dir, AiConfig.cacheBytes)
@@ -481,7 +528,8 @@ object PageColorizer {
             data[i] = chroma.a[i].coerceIn(-127f, 127f).roundToInt().toByte()
             data[CHROMA_SIZE + i] = chroma.b[i].coerceIn(-127f, 127f).roundToInt().toByte()
         }
-        val temp = File(dir, file.name + ".tmp")
+        // اسم مؤقت فريد كما في saveCachedPage
+        val temp = File(dir, "${file.name}.${System.nanoTime()}.tmp")
         temp.writeBytes(data)
         temp.renameTo(file)
         trimCache(dir, MAX_CHROMA_CACHE_BYTES)
@@ -491,7 +539,11 @@ object PageColorizer {
 
     /** Deletes the least recently used entries once the folder grows past [limit] bytes. */
     private fun trimCache(dir: File, limit: Long) {
-        val files = dir.listFiles()?.sortedBy { it.lastModified() } ?: return
+        // تجاهل الملفات المؤقتة الناقلة حتى لا تُحذف أثناء الكتابة
+        val files = dir.listFiles()
+            ?.filter { !it.name.endsWith(".tmp") }
+            ?.sortedBy { it.lastModified() }
+            ?: return
         var total = files.sumOf { it.length() }
         for (file in files) {
             if (total <= limit) break
