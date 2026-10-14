@@ -79,6 +79,12 @@ internal fun ColumnScope.AiPage(viewModel: ReaderSettingsViewModel) {
         IntSlider("Color intensity", prefs.colorizeIntensity, 0..120) { "$it%" }
     }
     CheckboxItem(label = "Upscale pages (Anime4K)", pref = prefs.upscaleEnabled)
+
+    CheckboxItem(label = "Shrink big pages before upscaling", pref = prefs.upscaleNormalizeEnabled)
+    val normalizeEnabled by prefs.upscaleNormalizeEnabled.collectAsState()
+    if (normalizeEnabled) {
+        IntSlider("Shrink to short side", prefs.upscaleNormalizeShortSide, 600..1600) { "$it px" }
+    }
     
     TranslationSection(prefs)
 
