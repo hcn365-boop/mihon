@@ -18,7 +18,11 @@ import java.io.Closeable
 import java.io.File
 import java.security.MessageDigest
 import kotlin.coroutines.cancellation.CancellationException
+import org.opencv.core.Size
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
+
 
 /**
  * Processes a manga page for the reader: colorize, then upscale, then translate (text drawn into the
