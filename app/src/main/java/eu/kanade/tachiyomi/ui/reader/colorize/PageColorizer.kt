@@ -163,7 +163,15 @@ object PageColorizer {
         val pixels = bounds.outWidth.toLong() * bounds.outHeight
 
         val doColor = wantColor && pixels <= AiConfig.colorizeMaxPixels
-        val doUpscale = wantUpscale && pixels <= AiConfig.upscaleMaxPixels
+        val shortSide = minOf(bounds.outWidth, bounds.outHeight)
+        val normalize = AiConfig.normalizeSide
+        val upscaleInputPixels = if (normalize in 1 until shortSide) {
+            val ratio = normalize.toDouble() / shortSide
+            (pixels * ratio * ratio).toLong()
+        } else {
+            pixels
+        }
+        val doUpscale = wantUpscale && upscaleInputPixels <= AiConfig.upscaleMaxPixels
         val translationConfig = translation?.takeIf { pixels <= AiConfig.colorizeMaxPixels }
         if (!doColor && !doUpscale && translationConfig == null) return null
 
