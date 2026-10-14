@@ -420,7 +420,11 @@ object PageColorizer {
 
     private fun baseName(imageHash: String, intensity: Float, upscale: Boolean, colorModel: File, upscaleModel: File): String {
         val color = if (intensity < 0f) "n" else (intensity * 100).roundToInt().toString()
-        val upscaleStamp = if (upscale) upscaleModel.length().toString() else "n"
+                val upscaleStamp = if (upscale) {
+            "${upscaleModel.length()}_${AiConfig.upscaleMaxOutputPixels / 1_000_000}_n${AiConfig.normalizeSide}"
+        } else {
+            "n"
+                }
         return "${imageHash}_c${color}_${colorModel.length()}_u$upscaleStamp"
     }
 
