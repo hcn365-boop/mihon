@@ -15,9 +15,11 @@ import org.opencv.imgproc.Imgproc
 import java.io.Closeable
 import java.io.File
 import java.nio.FloatBuffer
+import org.opencv.core.Size
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+
 /**
  * Anime4K "AI" upscaler: runs an ACNet ONNX model (1 channel in, 1 channel out, 2x) on the luminance
  * of the page and enlarges the color channels with plain interpolation.
