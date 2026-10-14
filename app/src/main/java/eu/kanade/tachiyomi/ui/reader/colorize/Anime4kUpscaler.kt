@@ -15,7 +15,9 @@ import org.opencv.imgproc.Imgproc
 import java.io.Closeable
 import java.io.File
 import java.nio.FloatBuffer
-
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 /**
  * Anime4K "AI" upscaler: runs an ACNet ONNX model (1 channel in, 1 channel out, 2x) on the luminance
  * of the page and enlarges the color channels with plain interpolation.
@@ -48,7 +50,20 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
         }
     }
 
-    fun upscale(input: Bitmap): Bitmap = Mats().use { m ->
+        fun upscale(input: Bitmap, maxShortSide: Int = 0): Bitmap = Mats().use { m ->
+
+        if (maxShortSide > 0) {
+            val shortSide = min(rgb.cols(), rgb.rows())
+            if (shortSide > maxShortSide) {
+                val ratio = maxShortSide.toDouble() / shortSide
+                val newSize = Size(
+                    max(1, (rgb.cols() * ratio).roundToInt()).toDouble(),
+                    max(1, (rgb.rows() * ratio).roundToInt()).toDouble(),
+                )
+                Imgproc.resize(rgb, rgb, newSize, 0.0, 0.0, Imgproc.INTER_AREA)
+            }
+        }
+            
         val rgba = m.mat()
         toMat(input, rgba)
         val rgb = m.mat()
