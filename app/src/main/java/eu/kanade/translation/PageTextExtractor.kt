@@ -6,8 +6,11 @@ import com.google.mlkit.vision.text.Text
 import eu.kanade.translation.model.PageTranslation
 import eu.kanade.translation.model.TranslationBlock
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /** Which OCR engine reads the page. HYBRID runs both and combines the results. */
 enum class OcrMode { MLKIT, PADDLE, HYBRID }
@@ -45,7 +48,7 @@ class PageTextExtractor(
         if (boxes.isEmpty()) return null
 
         val page = PageTranslation(imgWidth = bitmap.width.toFloat(), imgHeight = bitmap.height.toFloat())
-        // استخدام خوارزمية الدمج المتقدمة المستفادة من ChapterTranslator بدون حل التداخل
+        // الدمج + التوسيع + منع تصادم الفقاعات — نفس منطق ChapterTranslator
         page.blocks = TextBlockMerger.merge(boxes.map { it.toBlock() }, bitmap.width.toFloat(), bitmap.height.toFloat())
         return page.takeIf { it.blocks.isNotEmpty() }
     }
@@ -138,7 +141,7 @@ internal object TextBlockMerger {
 
         val filteredBlocks = blocks.filter { it.text.isNotBlank() }
         val isWebtoon = imgHeight > 2300f || imgHeight > (imgWidth * 2f)
-        
+
         // استخدام نظام العناقيد (Clustering) الآمن والسريع بدل إعادة ضبط المؤشر لمنع التعليق
         val clusters = mutableListOf<MutableList<TranslationBlock>>()
         val unmerged = filteredBlocks.toMutableList()
@@ -166,11 +169,172 @@ internal object TextBlockMerger {
         }
 
         // دمج عناصر كل عنقود معاً بسلام ودون استنزاف للمعالج
-        return clusters.map { cluster ->
+        val mergedBlocks = clusters.map { cluster ->
             cluster.drop(1).fold(cluster.first()) { merged, next ->
                 mergeTextBlock(merged, next, isWebtoon)
             }
         }.toMutableList()
+
+        // ═══════════════════════════════════════════════════════════════
+        // التوسيع (Expansion) — نفس منطق ChapterTranslator
+        // عند استخراج النص تكون الترجمة فارغة، فيكون المعامل = 1.0
+        // وتبقى فقط هوامش الأمان 1.3x لمنع التصاق الفقاعات بالحواف
+        // ═══════════════════════════════════════════════════════════════
+        val expandedBlocks = mergedBlocks.map { block ->
+            val cleanedText = block.text.replace("\n", " ").trim()
+            val cleanedTranslation = block.translation?.replace("\n", " ")?.trim() ?: ""
+
+            val textRatio = (cleanedTranslation.length.toFloat() / cleanedText.length.coerceAtLeast(1))
+                .coerceIn(1.0f, 1.25f)
+            val finalScale = sqrt(textRatio.toDouble()).toFloat()
+
+            var newHeight: Float
+            var newWidth: Float
+            if (abs(block.angle) in 70.0..110.0) {
+                newHeight = block.height * finalScale
+                newWidth = block.width * finalScale * 1.3f
+            } else {
+                newHeight = block.height * finalScale * 1.3f
+                newWidth = block.width * finalScale
+            }
+
+            val newX = block.x - (newWidth - block.width) / 2f
+            val newY = block.y - (newHeight - block.height) / 2f
+
+            block.copy(
+                text = cleanedText,
+                translation = cleanedTranslation,
+                width = newWidth.coerceAtMost(imgWidth),
+                height = newHeight.coerceAtMost(imgHeight),
+                x = newX.coerceIn(0f, imgWidth - newWidth.coerceAtMost(imgWidth)),
+                y = newY.coerceIn(0f, imgHeight - newHeight.coerceAtMost(imgHeight)),
+            )
+        }.toMutableList()
+
+        // ═══════════════════════════════════════════════════════════════
+        // منع تصادم الفقاعات — نفس آلية ChapterTranslator.resolveCollisions
+        // ═══════════════════════════════════════════════════════════════
+        resolveCollisions(expandedBlocks, imgWidth, imgHeight)
+        return expandedBlocks
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ═══  آلية منع تصادم الفقاعات  ════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════
+
+    private fun resolveCollisions(blocks: MutableList<TranslationBlock>, imgWidth: Float, imgHeight: Float) {
+        val iterations = 6
+        for (step in 0 until iterations) {
+            var collisionsResolved = 0
+            for (idx in blocks.indices) {
+                for (jdx in idx + 1 until blocks.size) {
+                    val a = blocks[idx]
+                    val b = blocks[jdx]
+                    if (!isOverlapping(a, b)) continue
+                    collisionsResolved++
+
+                    val aArea = a.width * a.height
+                    val bArea = b.width * b.height
+                    val movingIdx = if (aArea <= bArea) idx else jdx
+                    val staticBlock = if (movingIdx == idx) b else a
+                    var movingBlock = blocks[movingIdx]
+
+                    val overlapRight = (staticBlock.x + staticBlock.width) - movingBlock.x
+                    val overlapLeft  = (movingBlock.x + movingBlock.width) - staticBlock.x
+                    val overlapDown  = (staticBlock.y + staticBlock.height) - movingBlock.y
+                    val overlapUp    = (movingBlock.y + movingBlock.height) - staticBlock.y
+
+                    val isAngled = abs(movingBlock.angle) > 20f && abs(movingBlock.angle) < 160f
+                    val directions = buildDirections(overlapLeft, overlapRight, overlapUp, overlapDown, isAngled, movingBlock.angle)
+
+                    var bestX = movingBlock.x
+                    var bestY = movingBlock.y
+                    var bestCollisions = Int.MAX_VALUE
+                    var bestDist = Float.MAX_VALUE
+                    var foundValid = false
+
+                    for ((dx, dy) in directions) {
+                        val testX = (movingBlock.x + dx).coerceIn(0f, imgWidth - movingBlock.width)
+                        val testY = (movingBlock.y + dy).coerceIn(0f, imgHeight - movingBlock.height)
+                        val tested = movingBlock.copy(x = testX, y = testY)
+                        var nextCollisions = 0
+                        for (k in blocks.indices) {
+                            if (k != movingIdx && isOverlapping(tested, blocks[k])) nextCollisions++
+                        }
+                        val dist = abs(dx) + abs(dy)
+                        if (nextCollisions < bestCollisions || (nextCollisions == bestCollisions && dist < bestDist)) {
+                            bestCollisions = nextCollisions
+                            bestDist = dist
+                            bestX = testX
+                            bestY = testY
+                            foundValid = true
+                        }
+                    }
+
+                    if (!foundValid || bestCollisions >= countCollisions(movingBlock, blocks, movingIdx)) {
+                        val shrinkFactor = 0.88f
+                        val newW = movingBlock.width * shrinkFactor
+                        val newH = movingBlock.height * shrinkFactor
+                        movingBlock = movingBlock.copy(
+                            width = newW, height = newH,
+                            x = movingBlock.x + (movingBlock.width - newW) / 2f,
+                            y = movingBlock.y + (movingBlock.height - newH) / 2f,
+                        )
+                        val overlapRight2 = (staticBlock.x + staticBlock.width) - movingBlock.x
+                        val overlapLeft2  = (movingBlock.x + movingBlock.width) - staticBlock.x
+                        val overlapDown2  = (staticBlock.y + staticBlock.height) - movingBlock.y
+                        val overlapUp2    = (movingBlock.y + movingBlock.height) - staticBlock.y
+                        val dirs2 = buildDirections(overlapLeft2, overlapRight2, overlapUp2, overlapDown2, isAngled, movingBlock.angle)
+                        for ((dx, dy) in dirs2) {
+                            val testX = (movingBlock.x + dx).coerceIn(0f, imgWidth - movingBlock.width)
+                            val testY = (movingBlock.y + dy).coerceIn(0f, imgHeight - movingBlock.height)
+                            val tested = movingBlock.copy(x = testX, y = testY)
+                            var nc = 0
+                            for (k in blocks.indices) { if (k != movingIdx && isOverlapping(tested, blocks[k])) nc++ }
+                            val dist = abs(dx) + abs(dy)
+                            if (nc < bestCollisions || (nc == bestCollisions && dist < bestDist)) {
+                                bestCollisions = nc; bestDist = dist; bestX = testX; bestY = testY
+                            }
+                        }
+                    }
+                    blocks[movingIdx] = movingBlock.copy(x = bestX, y = bestY)
+                }
+            }
+            if (collisionsResolved == 0) break
+        }
+    }
+
+    private fun buildDirections(
+        overlapLeft: Float, overlapRight: Float, overlapUp: Float, overlapDown: Float,
+        isAngled: Boolean, angle: Float,
+    ): List<Pair<Float, Float>> {
+        val baseDirections = listOf(
+            Pair(-overlapLeft, 0f), Pair(overlapRight, 0f),
+            Pair(0f, -overlapUp), Pair(0f, overlapDown),
+            Pair(-overlapLeft, -overlapUp), Pair(overlapRight, -overlapUp),
+            Pair(-overlapLeft, overlapDown), Pair(overlapRight, overlapDown),
+        )
+        return if (isAngled) {
+            val rad = Math.toRadians(angle.toDouble())
+            val axisX = cos(rad).toFloat()
+            val axisY = sin(rad).toFloat()
+            val magnitude = max(overlapLeft, overlapRight)
+            val angledDirs = listOf(Pair(axisX * magnitude, axisY * magnitude), Pair(-axisX * magnitude, -axisY * magnitude))
+            (angledDirs + baseDirections).sortedBy { abs(it.first) + abs(it.second) }
+        } else {
+            baseDirections.sortedBy { abs(it.first) + abs(it.second) }
+        }
+    }
+
+    private fun countCollisions(block: TranslationBlock, blocks: List<TranslationBlock>, selfIdx: Int): Int {
+        var count = 0
+        for (k in blocks.indices) { if (k != selfIdx && isOverlapping(block, blocks[k])) count++ }
+        return count
+    }
+
+    private fun isOverlapping(a: TranslationBlock, b: TranslationBlock): Boolean {
+        return a.x < b.x + b.width && a.x + a.width > b.x &&
+            a.y < b.y + b.height && a.y + a.height > b.y
     }
 
     private fun shouldMergeTextBlock(
@@ -260,4 +424,3 @@ internal object TextBlockMerger {
         )
     }
 }
-
