@@ -60,7 +60,6 @@ class PaddleTextRecognizer(
         try {
             ortEnvironment = OrtEnvironment.getEnvironment()
 
-            // 1. تحميل نموذج الاكتشاف (Detection Model)
             Log.d(TAG, "Loading detection model...")
             val detModel = context.assets.open("paddleocr/det_model.onnx").readBytes()
             val detOptions = OrtSession.SessionOptions().apply {
@@ -70,9 +69,12 @@ class PaddleTextRecognizer(
             detSession = ortEnvironment?.createSession(detModel, detOptions)
             Log.d(TAG, "Detection model loaded successfully.")
 
-            // 2. تحميل نموذج التعرف الموحد والقاموس الموحد (Multilingual Model & Dict)
-            val recModelPath = "paddleocr/multilingual_rec_model.onnx"
-            val dictPath = "paddleocr/multilingual_dict.txt"
+            val (recModelPath, dictPath) = when (language) {
+                TextRecognizerLanguage.CHINESE -> Pair("paddleocr/rec_ch_model.onnx", "paddleocr/ch_dict.txt")
+                TextRecognizerLanguage.JAPANESE -> Pair("paddleocr/rec_jp_model.onnx", "paddleocr/jp_dict.txt")
+                TextRecognizerLanguage.KOREAN -> Pair("paddleocr/rec_kr_model.onnx", "paddleocr/kr_dict.txt")
+                else -> Pair("paddleocr/rec_en_model.onnx", "paddleocr/en_dict.txt")
+            }
 
             Log.d(TAG, "Loading recognition model from $recModelPath...")
             val recModel = context.assets.open(recModelPath).readBytes()
@@ -89,8 +91,8 @@ class PaddleTextRecognizer(
             }
             Log.d(TAG, "Dictionary loaded with ${dictionary.size} entries.")
 
-            Log.i(TAG, "تم تهيئة PaddleOCR الموحد بنجاح للغة: ${language.name}")
-            logcat(LogPriority.INFO) { "تم تهيئة PaddleOCR الموحد بنجاح للغة: ${language.name}" }
+            Log.i(TAG, "تم تهيئة PaddleOCR بنجاح للغة: ${language.name}")
+            logcat(LogPriority.INFO) { "تم تهيئة PaddleOCR بنجاح للغة: ${language.name}" }
 
         } catch (e: Exception) {
             Log.e(TAG, "فشل في تحميل نماذج ONNX", e)
@@ -287,6 +289,7 @@ class PaddleTextRecognizer(
                     val bw = maxX - minX
                     val bh = maxY - minY
 
+                    val aspectRatio = if (bh > 0) bw.toFloat() / bh else 1f
                     if (bw < 3 && bh < 3) continue
 
                     val perimeter = 2 * (bw + bh)
@@ -451,7 +454,8 @@ class PaddleTextRecognizer(
 
             val matrix = Matrix()
             matrix.postRotate(-angle, bitmap.width / 2f, bitmap.height / 2f)
-            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            rotated
         } catch (e: Exception) {
             Log.e(TAG, "خطأ في deskew", e)
             bitmap
@@ -548,25 +552,7 @@ class PaddleTextRecognizer(
             val outputData = result?.get(0)?.value as? Array<Array<FloatArray>> ?: return Pair("", 0f)
             val sequence = outputData[0]
 
-            val sample = sequence[0]
-
-            Log.e(
-                "OCR_SHAPE",
-                "firstStep min=${sample.minOrNull()} max=${sample.maxOrNull()}"
-            )
-
-            Log.e(
-                "OCR_SIZE",
-                "crop=${processedBitmap.width}x${processedBitmap.height} target=${targetWidth}x${targetHeight}"
-            )
-
-            // استخدام طريقة greedyDecode للقاموس متعدد اللغات لسرعتها ودقتها
             val resultText = decodeGreedy(sequence)
-
-            Log.e(
-                "OCR_OUTPUT",
-                "text=[${resultText.first}] conf=${resultText.second} crop=${processedBitmap.width}x${processedBitmap.height}"
-            )
 
             resultText
 
@@ -606,6 +592,49 @@ class PaddleTextRecognizer(
 
         val finalConf = if (validCharCount == 0) 0f else (confidenceSum / validCharCount)
         return Pair(extractedText.toString().trim(), finalConf)
+    }
+
+    private fun decodeBeamSearch(sequence: Array<FloatArray>, beamWidth: Int): Pair<String, Float> {
+        data class Beam(
+            val text: String,
+            val lastIdx: Int,
+            val logProb: Float,
+            val charCount: Int,
+            val confSum: Float
+        )
+
+        var beams = listOf(Beam("", 0, 0f, 0, 0f))
+
+        for (probs in sequence) {
+            val topK = probs.indices
+                .sortedByDescending { probs[it] }
+                .take(beamWidth)
+
+            val newBeams = mutableListOf<Beam>()
+            for (beam in beams) {
+                for (idx in topK) {
+                    val prob = probs[idx]
+                    val logP = if (prob > 0f) kotlin.math.ln(prob.toDouble()).toFloat() else -20f
+
+                    if (idx == 0) {
+                        newBeams.add(Beam(beam.text, 0, beam.logProb + logP, beam.charCount, beam.confSum))
+                    } else if (idx != beam.lastIdx && idx < dictionary.size) {
+                        val newText = beam.text + dictionary[idx]
+                        newBeams.add(Beam(newText, idx, beam.logProb + logP, beam.charCount + 1, beam.confSum + prob))
+                    } else {
+                        newBeams.add(Beam(beam.text, beam.lastIdx, beam.logProb + logP, beam.charCount, beam.confSum))
+                    }
+                }
+            }
+
+            beams = newBeams
+                .sortedByDescending { it.logProb }
+                .take(beamWidth)
+        }
+
+        val best = beams.firstOrNull() ?: return Pair("", 0f)
+        val finalConf = if (best.charCount == 0) 0f else best.confSum / best.charCount
+        return Pair(best.text.trim(), finalConf)
     }
 
     private fun mergeBlocksIntelligently(blocks: List<PaddleTextBlock>): List<PaddleTextBlock> {
