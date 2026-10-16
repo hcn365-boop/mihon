@@ -12,6 +12,7 @@ import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
 import tachiyomi.core.common.util.system.logcat
+import logcat.LogPriority
 
 /** Which OCR engine reads the page. HYBRID runs both and combines the results. */
 enum class OcrMode { MLKIT, PADDLE, HYBRID }
