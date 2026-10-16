@@ -51,80 +51,78 @@ class PaddleTextRecognizer(
     private var recSession: OrtSession? = null
     private val dictionary = mutableListOf<String>()
 
-    // بما أن القاموس الشامل يحتوي على رموز متعددة، نجعل التحقق من المسافات مرناً
     private val usesWordSpaces: Boolean
         get() = language != TextRecognizerLanguage.JAPANESE &&
             language != TextRecognizerLanguage.CHINESE
 
     init {
-        Log.d(TAG, "Initializing PaddleTextRecognizer for language: $language")
+        Log.d(TAG, "Initializing PaddleTextRecognizer for language: $language")[span_8](start_span)[span_8](end_span)
         try {
             ortEnvironment = OrtEnvironment.getEnvironment()
 
-            Log.d(TAG, "Loading detection model...")
-            val detModel = context.assets.open("paddleocr/det_model.onnx").readBytes()
+            Log.d(TAG, "Loading detection model...")[span_9](start_span)[span_9](end_span)
+            val detModel = context.assets.open("paddleocr/det_model.onnx").readBytes()[span_10](start_span)[span_10](end_span)[span_11](start_span)[span_11](end_span)
             val detOptions = OrtSession.SessionOptions().apply {
                 setIntraOpNumThreads(4)
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
             }
             detSession = ortEnvironment?.createSession(detModel, detOptions)
-            Log.d(TAG, "Detection model loaded successfully.")
+            Log.d(TAG, "Detection model loaded successfully.")[span_12](start_span)[span_12](end_span)
 
-            // تحديد نموذج التعرف، بينما يتم استخدام القاموس الشامل (en_dict.txt) الذي يغطي كافة اللغات والرموز
             val (recModelPath, dictPath) = when (language) {
-                TextRecognizerLanguage.CHINESE -> Pair("paddleocr/rec_ch_model.onnx", "paddleocr/en_dict.txt")
-                TextRecognizerLanguage.JAPANESE -> Pair("paddleocr/rec_jp_model.onnx", "paddleocr/en_dict.txt")
-                TextRecognizerLanguage.KOREAN -> Pair("paddleocr/rec_kr_model.onnx", "paddleocr/en_dict.txt")
-                else -> Pair("paddleocr/rec_en_model.onnx", "paddleocr/en_dict.txt")
+                TextRecognizerLanguage.CHINESE -> Pair("paddleocr/rec_ch_model.onnx", "paddleocr/en_dict.txt")[span_13](start_span)[span_13](end_span)[span_14](start_span)[span_14](end_span)
+                TextRecognizerLanguage.JAPANESE -> Pair("paddleocr/rec_jp_model.onnx", "paddleocr/en_dict.txt")[span_15](start_span)[span_15](end_span)[span_16](start_span)[span_16](end_span)
+                TextRecognizerLanguage.KOREAN -> Pair("paddleocr/rec_kr_model.onnx", "paddleocr/en_dict.txt")[span_17](start_span)[span_17](end_span)[span_18](start_span)[span_18](end_span)
+                else -> Pair("paddleocr/rec_en_model.onnx", "paddleocr/en_dict.txt")[span_19](start_span)[span_19](end_span)[span_20](start_span)[span_20](end_span)
             }
 
-            Log.d(TAG, "Loading recognition model from $recModelPath...")
-            val recModel = context.assets.open(recModelPath).readBytes()
+            Log.d(TAG, "Loading recognition model from $recModelPath...")[span_21](start_span)[span_21](end_span)
+            val recModel = context.assets.open(recModelPath).readBytes()[span_22](start_span)[span_22](end_span)
             val recOptions = OrtSession.SessionOptions().apply {
                 setIntraOpNumThreads(4)
             }
             recSession = ortEnvironment?.createSession(recModel, recOptions)
-            Log.d(TAG, "Recognition model loaded successfully.")
+            Log.d(TAG, "Recognition model loaded successfully.")[span_23](start_span)[span_23](end_span)
 
-            Log.d(TAG, "Loading comprehensive multilingual dictionary from $dictPath...")
-            BufferedReader(InputStreamReader(context.assets.open(dictPath))).use { reader ->
-                dictionary.add("blank")
-                reader.forEachLine { line -> dictionary.add(line) }
+            Log.d(TAG, "Loading comprehensive multilingual dictionary from $dictPath...")[span_24](start_span)[span_24](end_span)[span_25](start_span)[span_25](end_span)
+            BufferedReader(InputStreamReader(context.assets.open(dictPath))).use { reader ->[span_26](start_span)[span_26](end_span)[span_27](start_span)[span_27](end_span)
+                dictionary.add("blank")[span_28](start_span)[span_28](end_span)[span_29](start_span)[span_29](end_span)[span_30](start_span)[span_30](end_span)
+                reader.forEachLine { line -> dictionary.add(line) }[span_31](start_span)[span_31](end_span)[span_32](start_span)[span_32](end_span)[span_33](start_span)[span_33](end_span)
             }
-            Log.d(TAG, "Dictionary loaded with ${dictionary.size} entries.")
+            Log.d(TAG, "Dictionary loaded with ${dictionary.size} entries.")[span_34](start_span)[span_34](end_span)[span_35](start_span)[span_35](end_span)
 
-            Log.i(TAG, "تم تهيئة PaddleOCR بنجاح للغة: ${language.name} باستخدام القاموس الشامل")
-            logcat(LogPriority.INFO) { "تم تهيئة PaddleOCR بنجاح للغة: ${language.name}" }
+            Log.i(TAG, "تم تهيئة PaddleOCR بنجاح للغة: ${language.name} باستخدام القاموس الشامل")[span_36](start_span)[span_36](end_span)[span_37](start_span)[span_37](end_span)
+            logcat(LogPriority.INFO) { "تم تهيئة PaddleOCR بنجاح للغة: ${language.name}" }[span_38](start_span)[span_38](end_span)
 
         } catch (e: Exception) {
-            Log.e(TAG, "فشل في تحميل نماذج ONNX أو القاموس", e)
-            logcat(LogPriority.ERROR, e) { "فشل في تحميل نماذج ONNX لـ PaddleOCR" }
+            Log.e(TAG, "فشل في تحميل نماذج ONNX أو القاموس", e)[span_39](start_span)[span_39](end_span)
+            logcat(LogPriority.ERROR, e) { "فشل في تحميل نماذج ONNX لـ PaddleOCR" }[span_40](start_span)[span_40](end_span)
         }
     }
 
     override fun recognize(image: InputImage): String {
-        Log.d(TAG, "Starting recognize(image) method")
+        Log.d(TAG, "Starting recognize(image) method")[span_41](start_span)[span_41](end_span)
         val result = process(image).joinToString("\n") { it.text }
-        Log.d(TAG, "recognize(image) finished processing")
+        Log.d(TAG, "recognize(image) finished processing")[span_42](start_span)[span_42](end_span)
         return result
     }
 
     fun process(image: InputImage): List<PaddleTextBlock> {
-        Log.d(TAG, "Starting process(image) method")
+        Log.d(TAG, "Starting process(image) method")[span_43](start_span)[span_43](end_span)
         val bitmap = image.bitmapInternal ?: run {
-            Log.w(TAG, "Image bitmap is null, returning empty list")
+            Log.w(TAG, "Image bitmap is null, returning empty list")[span_44](start_span)[span_44](end_span)
             return emptyList()
         }
 
-        Log.d(TAG, "Calling detectTextBoxes...")
+        Log.d(TAG, "Calling detectTextBoxes...")[span_45](start_span)[span_45](end_span)
         val boxes = detectTextBoxes(bitmap)
-        Log.d(TAG, "detectTextBoxes returned ${boxes.size} boxes")
+        Log.d(TAG, "detectTextBoxes returned ${boxes.size} boxes")[span_46](start_span)[span_46](end_span)[span_47](start_span)[span_47](end_span)
 
         if (boxes.isEmpty()) return emptyList()
 
         val resultBlocks = mutableListOf<PaddleTextBlock>()
 
-        Log.d(TAG, "Processing each detected box for text recognition...")
+        Log.d(TAG, "Processing each detected box for text recognition...")[span_48](start_span)[span_48](end_span)
         for ((index, box) in boxes.withIndex()) {
             val cropW = box.maxX - box.minX
             val cropH = box.maxY - box.minY
@@ -150,7 +148,7 @@ class PaddleTextRecognizer(
 
                 val (text, confidence) = recognizeCrop(preprocessedCrop)
 
-                Log.d(TAG, "Raw Text [Box $index]: '$text' | Conf: $confidence")
+                Log.d(TAG, "Raw Text [Box $index]: '$text' | Conf: $confidence")[span_49](start_span)[span_49](end_span)
 
                 if (deskewedCrop != crop) deskewedCrop.recycle()
                 if (preprocessedCrop != deskewedCrop) preprocessedCrop.recycle()
@@ -167,21 +165,21 @@ class PaddleTextRecognizer(
                         )
                     )
                 } else {
-                    Log.d(TAG, "Rejected by isValidText [Box $index]: '$text'")
+                    Log.d(TAG, "Rejected by isValidText [Box $index]: '$text'")[span_50](start_span)[span_50](end_span)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "خطأ في قص الصورة للصندوق $index", e)
+                Log.e(TAG, "خطأ في قص الصورة للصندوق $index", e)[span_51](start_span)[span_51](end_span)
             } finally {
                 crop?.recycle()
             }
         }
 
-        Log.d(TAG, "Calling mergeBlocksIntelligently to merge ${resultBlocks.size} blocks...")
+        Log.d(TAG, "Calling mergeBlocksIntelligently to merge ${resultBlocks.size} blocks...")[span_52](start_span)[span_52](end_span)
         val finalBlocks = mergeBlocksIntelligently(resultBlocks)
 
         val extractedText = finalBlocks.joinToString("\n") { it.text }
         if (extractedText.isNotBlank()) {
-            Log.e("PADDLE_TEXT", "TEXT = \n$extractedText")
+            Log.e("PADDLE_TEXT", "TEXT = \n$extractedText")[span_53](start_span)[span_53](end_span)
         }
 
         return finalBlocks
@@ -210,19 +208,27 @@ class PaddleTextRecognizer(
             resized = Bitmap.createScaledBitmap(bitmap, targetW, targetH, true)
             val buffer = bitmapToFloatBuffer(resized)
 
-            tensor = OnnxTensor.createTensor(ortEnvironment, buffer, longArrayOf(1, 3, targetH.toLong(), targetW.toLong()))
-            result = detSession?.run(mapOf("x" to tensor))
+            tensor = OnnxTensor.createTensor(ortEnvironment, buffer, longArrayOf(1, 3, targetH.toLong(), targetW.toLong()))[span_54](start_span)[span_54](end_span)
+            val inputName = detSession?.inputNames?.first() ?: "x"
+            result = detSession?.run(mapOf(inputName to tensor))
 
-            val output = result?.get(0)?.value as? Array<Array<Array<FloatArray>>> ?: return emptyList()
-            val map = output[0][0]
+            // القراءة الآمنة للـ Tensor لتجنب انهيار النوع أو القيم الصامتة
+            val outputTensor = result?.get(0)?.orElse(null) as? OnnxTensor ?: return emptyList()
+            val shape = outputTensor.info.shape
+            if (shape.size < 4) return emptyList()
+
+            val mapH = shape[2].toInt()
+            val mapW = shape[3].toInt()
+            val values = FloatArray(mapH * mapW)
+            outputTensor.floatBuffer.get(values)
 
             val scaleX = bitmap.width.toFloat() / targetW
             val scaleY = bitmap.height.toFloat() / targetH
 
-            extractAndUnclipBoxes(map, threshold = 0.4f, minArea = 30, scaleX, scaleY, bitmap.width, bitmap.height)
+            extractAndUnclipBoxesSafe(values, mapW, mapH, threshold = 0.4f, minArea = 30, scaleX, scaleY, bitmap.width, bitmap.height)[span_55](start_span)[span_55](end_span)[span_56](start_span)[span_56](end_span)
 
         } catch (e: Exception) {
-            Log.e(TAG, "خطأ في مرحلة الـ Detection", e)
+            Log.e(TAG, "خطأ في مرحلة الـ Detection", e)[span_57](start_span)[span_57](end_span)
             emptyList()
         } finally {
             resized?.recycle()
@@ -231,8 +237,10 @@ class PaddleTextRecognizer(
         }
     }
 
-    private fun extractAndUnclipBoxes(
-        map: Array<FloatArray>,
+    private fun extractAndUnclipBoxesSafe(
+        map: FloatArray,
+        w: Int,
+        h: Int,
         threshold: Float,
         minArea: Int,
         scaleX: Float,
@@ -240,16 +248,14 @@ class PaddleTextRecognizer(
         maxWidth: Int,
         maxHeight: Int
     ): List<TextBox> {
-        val h = map.size
-        val w = map[0].size
-        val visited = Array(h) { BooleanArray(w) }
+        val visited = BooleanArray(w * h)
         val rawBoxes = mutableListOf<TextBox>()
-
         val unclipRatio = 1.3f
 
         for (y in 0 until h) {
             for (x in 0 until w) {
-                if (visited[y][x] || map[y][x] < threshold) continue
+                val idx = y * w + x
+                if (visited[idx] || map[idx] < threshold) continue
 
                 var minX = x; var maxX = x
                 var minY = y; var maxY = y
@@ -257,7 +263,7 @@ class PaddleTextRecognizer(
 
                 val queue = ArrayDeque<Pair<Int, Int>>()
                 queue.add(Pair(x, y))
-                visited[y][x] = true
+                visited[idx] = true
 
                 while (queue.isNotEmpty()) {
                     val (cx, cy) = queue.removeFirst()
@@ -280,8 +286,9 @@ class PaddleTextRecognizer(
                     )
                     for ((nx, ny) in neighbors) {
                         if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue
-                        if (!visited[ny][nx] && map[ny][nx] >= threshold) {
-                            visited[ny][nx] = true
+                        val nIdx = ny * w + nx
+                        if (!visited[nIdx] && map[nIdx] >= threshold) {
+                            visited[nIdx] = true
                             queue.add(Pair(nx, ny))
                         }
                     }
@@ -290,8 +297,6 @@ class PaddleTextRecognizer(
                 if (area >= minArea) {
                     val bw = maxX - minX
                     val bh = maxY - minY
-
-                    val aspectRatio = if (bh > 0) bw.toFloat() / bh else 1f
                     if (bw < 3 && bh < 3) continue
 
                     val perimeter = 2 * (bw + bh)
@@ -311,7 +316,7 @@ class PaddleTextRecognizer(
             }
         }
 
-        return mergeOverlappingBoxes(rawBoxes)
+        return mergeOverlappingBoxes(rawBoxes)[span_58](start_span)[span_58](end_span)[span_59](start_span)[span_59](end_span)
     }
 
     private fun mergeOverlappingBoxes(boxes: List<TextBox>): List<TextBox> {
@@ -388,7 +393,7 @@ class PaddleTextRecognizer(
             result.recycle()
             sharpened
         } catch (e: Exception) {
-            Log.e(TAG, "خطأ في preprocessing", e)
+            Log.e(TAG, "خطأ في preprocessing", e)[span_60](start_span)[span_60](end_span)
             bitmap
         }
     }
@@ -439,27 +444,18 @@ class PaddleTextRecognizer(
     }
 
     private fun applyBasicDeskewIfNecessary(bitmap: Bitmap): Bitmap {
-        if (bitmap.height > bitmap.width * 1.5) {
-            return bitmap
-        }
-
-        if (bitmap.width < 30 || bitmap.height < 10) {
-            return bitmap
-        }
+        if (bitmap.height > bitmap.width * 1.5) return bitmap
+        if (bitmap.width < 30 || bitmap.height < 10) return bitmap
 
         return try {
             val angle = estimateSkewAngle(bitmap)
-
-            if (abs(angle) < 0.5f || abs(angle) > 15f) {
-                return bitmap
-            }
+            if (abs(angle) < 0.5f || abs(angle) > 15f) return bitmap
 
             val matrix = Matrix()
             matrix.postRotate(-angle, bitmap.width / 2f, bitmap.height / 2f)
-            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-            rotated
+            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
         } catch (e: Exception) {
-            Log.e(TAG, "خطأ في deskew", e)
+            Log.e(TAG, "خطأ في deskew", e)[span_61](start_span)[span_61](end_span)
             bitmap
         }
     }
@@ -467,7 +463,6 @@ class PaddleTextRecognizer(
     private fun estimateSkewAngle(bitmap: Bitmap): Float {
         val w = bitmap.width
         val h = bitmap.height
-
         val scale = if (w > 300) 300f / w else 1f
         val sw = (w * scale).toInt()
         val sh = (h * scale).toInt()
@@ -493,7 +488,6 @@ class PaddleTextRecognizer(
                 bestAngle = angle
             }
         }
-
         return bestAngle
     }
 
@@ -505,7 +499,6 @@ class PaddleTextRecognizer(
         val cy = h / 2f
 
         val projection = FloatArray(h)
-
         for (y in 0 until h) {
             var rowSum = 0f
             for (x in 0 until w) {
@@ -531,13 +524,7 @@ class PaddleTextRecognizer(
     private fun recognizeCrop(processedBitmap: Bitmap): Pair<String, Float> {
         val targetHeight = 48
         val aspectRatio = processedBitmap.width.toFloat() / processedBitmap.height.toFloat()
-        val targetWidth = min(
-            320,
-            max(
-                48,
-                (targetHeight * aspectRatio).toInt()
-            )
-        )
+        val targetWidth = min(320, max(48, (targetHeight * aspectRatio).toInt()))
 
         var resizedBitmap: Bitmap? = null
         var inputTensor: OnnxTensor? = null
@@ -548,16 +535,28 @@ class PaddleTextRecognizer(
             val floatBuffer = bitmapToFloatBuffer(resizedBitmap)
             val shape = longArrayOf(1, 3, targetHeight.toLong(), targetWidth.toLong())
 
-            inputTensor = OnnxTensor.createTensor(ortEnvironment, floatBuffer, shape)
-            result = recSession?.run(mapOf("x" to inputTensor))
+            inputTensor = OnnxTensor.createTensor(ortEnvironment, floatBuffer, shape)[span_62](start_span)[span_62](end_span)
+            val inputName = recSession?.inputNames?.first() ?: "x"
+            result = recSession?.run(mapOf(inputName to inputTensor))
 
-            val outputData = result?.get(0)?.value as? Array<Array<FloatArray>> ?: return Pair("", 0f)
-            val sequence = outputData[0]
+            val outputTensor = result?.get(0)?.orElse(null) as? OnnxTensor ?: return Pair("", 0f)
+            val shapeRec = outputTensor.info.shape
+            if (shapeRec.size < 3) return Pair("", 0f)
 
-            decodeGreedy(sequence)
+            val timeSteps = shapeRec[1].toInt()
+            val classes = shapeRec[2].toInt()
+            val values = FloatArray(timeSteps * classes)
+            outputTensor.floatBuffer.get(values)
+
+            // إعادة تشكيل مصفوفة لفك التشفير
+            val sequence = Array(timeSteps) { t ->
+                FloatArray(classes) { c -> values[t * classes + c] }
+            }
+
+            decodeGreedy(sequence)[span_63](start_span)[span_63](end_span)[span_64](start_span)[span_64](end_span)
 
         } catch (e: Exception) {
-            Log.e(TAG, "خطأ أثناء فك التشفير (Recognition)", e)
+            Log.e(TAG, "خطأ أثناء فك التشفير (Recognition)", e)[span_65](start_span)[span_65](end_span)
             Pair("", 0f)
         } finally {
             resizedBitmap?.recycle()
@@ -583,7 +582,7 @@ class PaddleTextRecognizer(
             }
 
             if (maxIdx != 0 && maxIdx != lastIndex && maxIdx < dictionary.size) {
-                extractedText.append(dictionary[maxIdx])
+                extractedText.append(dictionary[maxIdx])[span_66](start_span)[span_66](end_span)[span_67](start_span)[span_67](end_span)[span_68](start_span)[span_68](end_span)
                 confidenceSum += maxProb
                 validCharCount++
             }
@@ -592,49 +591,6 @@ class PaddleTextRecognizer(
 
         val finalConf = if (validCharCount == 0) 0f else (confidenceSum / validCharCount)
         return Pair(extractedText.toString().trim(), finalConf)
-    }
-
-    private fun decodeBeamSearch(sequence: Array<FloatArray>, beamWidth: Int): Pair<String, Float> {
-        data class Beam(
-            val text: String,
-            val lastIdx: Int,
-            val logProb: Float,
-            val charCount: Int,
-            val confSum: Float
-        )
-
-        var beams = listOf(Beam("", 0, 0f, 0, 0f))
-
-        for (probs in sequence) {
-            val topK = probs.indices
-                .sortedByDescending { probs[it] }
-                .take(beamWidth)
-
-            val newBeams = mutableListOf<Beam>()
-            for (beam in beams) {
-                for (idx in topK) {
-                    val prob = probs[idx]
-                    val logP = if (prob > 0f) kotlin.math.ln(prob.toDouble()).toFloat() else -20f
-
-                    if (idx == 0) {
-                        newBeams.add(Beam(beam.text, 0, beam.logProb + logP, beam.charCount, beam.confSum))
-                    } else if (idx != beam.lastIdx && idx < dictionary.size) {
-                        val newText = beam.text + dictionary[idx]
-                        newBeams.add(Beam(newText, idx, beam.logProb + logP, beam.charCount + 1, beam.confSum + prob))
-                    } else {
-                        newBeams.add(Beam(beam.text, beam.lastIdx, beam.logProb + logP, beam.charCount, beam.confSum))
-                    }
-                }
-            }
-
-            beams = newBeams
-                .sortedByDescending { it.logProb }
-                .take(beamWidth)
-        }
-
-        val best = beams.firstOrNull() ?: return Pair("", 0f)
-        val finalConf = if (best.charCount == 0) 0f else best.confSum / best.charCount
-        return Pair(best.text.trim(), finalConf)
     }
 
     private fun mergeBlocksIntelligently(blocks: List<PaddleTextBlock>): List<PaddleTextBlock> {
@@ -663,7 +619,6 @@ class PaddleTextRecognizer(
         }
 
         val intermediateBlocks = mutableListOf<PaddleTextBlock>()
-
         for (line in lines) {
             line.sortBy { it.x }
             var current = line.first()
@@ -671,12 +626,7 @@ class PaddleTextRecognizer(
             for (i in 1 until line.size) {
                 val next = line[i]
                 val horizontalGap = next.x - (current.x + current.width)
-
-                val estimatedCharWidth = if (current.text.isNotEmpty()) {
-                    current.width / current.text.length
-                } else {
-                    current.height * 0.6f
-                }
+                val estimatedCharWidth = if (current.text.isNotEmpty()) current.width / current.text.length else current.height * 0.6f
 
                 val mergeThreshold = estimatedCharWidth * 1.5f
                 val spaceThreshold = estimatedCharWidth * 3.0f
@@ -717,7 +667,6 @@ class PaddleTextRecognizer(
             line.sortBy { it.x }
             result.addAll(line)
         }
-
         return result
     }
 
@@ -738,11 +687,8 @@ class PaddleTextRecognizer(
 
     private fun isValidText(text: String, confidence: Float): Boolean {
         val trimmed = text.trim()
-
         if (trimmed.isEmpty() || confidence < 0.35f) return false
-
         if (trimmed.length == 1 && !trimmed[0].isLetterOrDigit() && confidence < 0.55f) return false
-
         return true
     }
 
@@ -773,7 +719,7 @@ class PaddleTextRecognizer(
             ortEnvironment?.close()
             dictionary.clear()
         } catch (e: Exception) {
-            Log.e(TAG, "خطأ أثناء تنظيف الذاكرة وإغلاق ONNX", e)
+            Log.e(TAG, "خطأ أثناء تنظيف الذاكرة وإغلاق ONNX", e)[span_69](start_span)[span_69](end_span)
         }
     }
 }
