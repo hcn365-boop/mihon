@@ -138,14 +138,35 @@ class PageTextExtractor(
 }
 
 
-internal object TextBlockMerger {
+    internal object TextBlockMerger {
+
+    // تعريف الأنماط
+    private val urlPattern = Regex("(?i)(https?://\\S+|www\\.\\S+|\\S+\\.(com|net|org|io|me|cc|tv|info))")
+    private val symbolsFilterPattern = Regex("""[_~•°^@#$&|\\-]""")
 
     fun merge(blocks: List<TranslationBlock>, imgWidth: Float, imgHeight: Float): MutableList<TranslationBlock> {
         if (blocks.isEmpty()) return mutableListOf()
 
-        val filteredBlocks = blocks.filter { it.text.isNotBlank() }
-        val isWebtoon = imgHeight > 2300f || imgHeight > (imgWidth * 2f)
+        // تطبيق الفلاتر واستبعاد الصناديق الفارغة أو التي تحتوي فقط على روابط أو رموز مزعجة
+        val filteredBlocks = blocks.mapNotNull { block ->
+            val cleanedText = block.text
+                .replace(urlPattern, "") // إزالة الروابط وعلامات المائية للمواقع
+                .replace(symbolsFilterPattern, " ") // استبدال الرموز العشوائية بمسافة لتجنب دمج الكلمات خطأ
+                .replace(Regex("\\s+"), " ") // توحيد المسافات الزائدة
+                .trim()
 
+            // إذا أصبح النص فارغاً بعد الفلترة (يعني أنه كان عبارة عن رابط أو رموز فقط)، نقوم بحذفه
+            if (cleanedText.isBlank() || cleanedText.length < 2) {
+                null
+            } else {
+                block.copy(text = cleanedText)
+            }
+        }
+
+        if (filteredBlocks.isEmpty()) return mutableListOf()
+
+        val isWebtoon = imgHeight > 2300f || imgHeight > (imgWidth * 2f)
+        
         // استخدام نظام العناقيد (Clustering) الآمن والسريع بدل إعادة ضبط المؤشر لمنع التعليق
         val clusters = mutableListOf<MutableList<TranslationBlock>>()
         val unmerged = filteredBlocks.toMutableList()
