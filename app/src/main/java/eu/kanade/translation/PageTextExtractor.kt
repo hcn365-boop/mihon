@@ -45,6 +45,7 @@ class PageTextExtractor(
             OcrMode.PADDLE -> paddleBoxes(image)
             OcrMode.HYBRID -> combine(mlKitBoxes(image), paddleBoxes(image))
         }
+        logcat(LogPriority.INFO) { "OCR $mode found ${boxes.size} boxes" }
         if (boxes.isEmpty()) return null
 
         val page = PageTranslation(imgWidth = bitmap.width.toFloat(), imgHeight = bitmap.height.toFloat())
