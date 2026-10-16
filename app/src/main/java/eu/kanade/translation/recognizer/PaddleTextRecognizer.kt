@@ -51,6 +51,7 @@ class PaddleTextRecognizer(
     private var recSession: OrtSession? = null
     private val dictionary = mutableListOf<String>()
 
+    // بما أن القاموس الشامل يحتوي على رموز متعددة، نجعل التحقق من المسافات مرناً
     private val usesWordSpaces: Boolean
         get() = language != TextRecognizerLanguage.JAPANESE &&
             language != TextRecognizerLanguage.CHINESE
@@ -69,10 +70,11 @@ class PaddleTextRecognizer(
             detSession = ortEnvironment?.createSession(detModel, detOptions)
             Log.d(TAG, "Detection model loaded successfully.")
 
+            // تحديد نموذج التعرف، بينما يتم استخدام القاموس الشامل (en_dict.txt) الذي يغطي كافة اللغات والرموز
             val (recModelPath, dictPath) = when (language) {
-                TextRecognizerLanguage.CHINESE -> Pair("paddleocr/rec_ch_model.onnx", "paddleocr/ch_dict.txt")
-                TextRecognizerLanguage.JAPANESE -> Pair("paddleocr/rec_jp_model.onnx", "paddleocr/jp_dict.txt")
-                TextRecognizerLanguage.KOREAN -> Pair("paddleocr/rec_kr_model.onnx", "paddleocr/kr_dict.txt")
+                TextRecognizerLanguage.CHINESE -> Pair("paddleocr/rec_ch_model.onnx", "paddleocr/en_dict.txt")
+                TextRecognizerLanguage.JAPANESE -> Pair("paddleocr/rec_jp_model.onnx", "paddleocr/en_dict.txt")
+                TextRecognizerLanguage.KOREAN -> Pair("paddleocr/rec_kr_model.onnx", "paddleocr/en_dict.txt")
                 else -> Pair("paddleocr/rec_en_model.onnx", "paddleocr/en_dict.txt")
             }
 
@@ -84,18 +86,18 @@ class PaddleTextRecognizer(
             recSession = ortEnvironment?.createSession(recModel, recOptions)
             Log.d(TAG, "Recognition model loaded successfully.")
 
-            Log.d(TAG, "Loading dictionary from $dictPath...")
+            Log.d(TAG, "Loading comprehensive multilingual dictionary from $dictPath...")
             BufferedReader(InputStreamReader(context.assets.open(dictPath))).use { reader ->
                 dictionary.add("blank")
                 reader.forEachLine { line -> dictionary.add(line) }
             }
             Log.d(TAG, "Dictionary loaded with ${dictionary.size} entries.")
 
-            Log.i(TAG, "تم تهيئة PaddleOCR بنجاح للغة: ${language.name}")
+            Log.i(TAG, "تم تهيئة PaddleOCR بنجاح للغة: ${language.name} باستخدام القاموس الشامل")
             logcat(LogPriority.INFO) { "تم تهيئة PaddleOCR بنجاح للغة: ${language.name}" }
 
         } catch (e: Exception) {
-            Log.e(TAG, "فشل في تحميل نماذج ONNX", e)
+            Log.e(TAG, "فشل في تحميل نماذج ONNX أو القاموس", e)
             logcat(LogPriority.ERROR, e) { "فشل في تحميل نماذج ONNX لـ PaddleOCR" }
         }
     }
@@ -552,9 +554,7 @@ class PaddleTextRecognizer(
             val outputData = result?.get(0)?.value as? Array<Array<FloatArray>> ?: return Pair("", 0f)
             val sequence = outputData[0]
 
-            val resultText = decodeGreedy(sequence)
-
-            resultText
+            decodeGreedy(sequence)
 
         } catch (e: Exception) {
             Log.e(TAG, "خطأ أثناء فك التشفير (Recognition)", e)
@@ -682,8 +682,7 @@ class PaddleTextRecognizer(
                 val spaceThreshold = estimatedCharWidth * 3.0f
 
                 if (horizontalGap < mergeThreshold) {
-                    val separator = if (usesWordSpaces) "" else ""
-                    current = mergeTwoBlocks(current, next, separator)
+                    current = mergeTwoBlocks(current, next, "")
                 } else if (usesWordSpaces && horizontalGap < spaceThreshold) {
                     current = mergeTwoBlocks(current, next, " ")
                 } else if (horizontalGap < current.height * 1.2f && !usesWordSpaces) {
