@@ -42,12 +42,13 @@ class PageTextExtractor(
 
     suspend fun extract(bitmap: Bitmap): PageTranslation? {
         val image = InputImage.fromBitmap(bitmap, 0)
+        logcat(LogPriority.ERROR) { ">>> OCR branch selected: mode=$mode <<<" }
         val boxes = when (mode) {
             OcrMode.MLKIT -> mlKitBoxes(image)
             OcrMode.PADDLE -> paddleBoxes(image)
             OcrMode.HYBRID -> combine(mlKitBoxes(image), paddleBoxes(image))
         }
-        logcat(LogPriority.INFO) { "OCR $mode found ${boxes.size} boxes" }
+        logcat(LogPriority.ERROR) { ">>> OCR $mode found ${boxes.size} boxes <<<" }
         if (boxes.isEmpty()) return null
 
         val page = PageTranslation(imgWidth = bitmap.width.toFloat(), imgHeight = bitmap.height.toFloat())
