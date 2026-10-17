@@ -19,14 +19,14 @@ import java.security.MessageDigest
  */
 object TranslationStore {
 
-    enum class Kind(val id: Int) {
-        /** Text blocks as read by OCR, not translated yet. */
+        enum class Kind(val id: Int) {
         OCR(0),
-
-        /** Blocks with their translation. */
         TRANSLATED(1),
-    }
 
+        /** The language the OCR of a page was run with, as a plain name. */
+        LANGUAGE(2),
+        }
+        
     private const val DATABASE = "translations.db"
     private const val TABLE = "pages"
 
@@ -84,6 +84,22 @@ object TranslationStore {
         database(context).insertWithOnConflict(TABLE, null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
+    fun loadText(context: Context, kind: Kind, name: String): String? =
+        database(context).rawQuery(
+            "SELECT data FROM $TABLE WHERE name = ? AND kind = ?",
+            arrayOf(name, kind.id.toString()),
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+
+    fun saveText(context: Context, kind: Kind, name: String, value: String) {
+        val values = ContentValues().apply {
+            put("name", name)
+            put("kind", kind.id)
+            put("data", value)
+            put("updated", System.currentTimeMillis())
+        }
+        database(context).insertWithOnConflict(TABLE, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+    
     /** Deletes everything of one kind, or of both kinds when [kind] is null. */
     fun clear(context: Context, kind: Kind? = null) {
         val db = database(context)
