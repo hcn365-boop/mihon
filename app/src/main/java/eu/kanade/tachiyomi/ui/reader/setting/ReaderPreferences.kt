@@ -208,6 +208,19 @@ class ReaderPreferences(
     // endregion
 
         // region Translation
+    // Choose the page language for each manga: manual choice, then title tag, then source language
+    val translateAutoLanguage: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_auto_language", false)
+
+    val translateAutoFromTitle: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_auto_title", true)
+
+    val translateAutoFromSource: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_auto_source", true)
+
+    // After OCR, check the language of the text and read the page again if it differs
+    val translateConfirmLanguage: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_confirm_language", false)
+
+    // Language chosen by hand for one manga; empty means automatic
+    fun mangaLanguage(mangaId: Long): Preference<String> =
+        preferenceStore.getString("pref_translate_from_manga_$mangaId", "")
 
     val translateEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_enabled", false)
 
