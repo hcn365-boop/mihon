@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.ui.reader.colorize.ColorizerModelInstaller
 import eu.kanade.tachiyomi.ui.reader.colorize.ModelKind
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsViewModel
-import eu.kanade.tachiyomi.ui.reader.setting.AiPrefs
+import eu.kanade.tachiyomi.ui.reader.colorize.AiPrefs
 import eu.kanade.translation.MangaTranslationContext
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.Preference
