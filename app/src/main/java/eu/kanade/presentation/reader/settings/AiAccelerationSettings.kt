@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.presentation.core.components.SliderItem
 import tachiyomi.presentation.core.util.collectAsState
+import eu.kanade.tachiyomi.ui.reader.colorize.AiPrefs
 
 /**
  * Where the colorizer and the upscaler run. NNAPI may use the GPU or NPU, or may be slower or give
