@@ -32,6 +32,7 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.presentation.core.components.CheckboxItem
 import tachiyomi.presentation.core.components.SliderItem
 import tachiyomi.presentation.core.util.collectAsState
+import eu.kanade.translation.MangaTranslationContext
 
 /** Translation part of the AI tab. Texts are plain strings for now. */
 @Composable
