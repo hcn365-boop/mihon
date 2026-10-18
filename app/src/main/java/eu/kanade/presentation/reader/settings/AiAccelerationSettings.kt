@@ -29,7 +29,7 @@ import tachiyomi.presentation.core.util.collectAsState
  * page that is processed.
  */
 @Composable
-internal fun AccelerationSection(prefs: ReaderPreferences) {
+internal fun AccelerationSection(prefs: AiPrefs) {
     Text(
         text = "Hardware for AI models. NNAPI can use the GPU or NPU if the phone supports it; if it fails, " +
             "the app switches back to the CPU until it is restarted.",
