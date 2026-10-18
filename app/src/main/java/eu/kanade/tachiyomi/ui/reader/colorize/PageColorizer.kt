@@ -190,7 +190,7 @@ object PageColorizer {
         val imageHash = hash(bytes)
         val shrinkSide = if (doShrink) normalize else 0
         val baseName = baseName(imageHash, if (doColor) intensity else -1f, doUpscale, shrinkSide, colorModel, upscaleModel)
-                val effective = translationConfig?.effectiveSettings()
+        val effective = translationConfig?.effectiveSettings()
         val finalName = translationConfig?.let { config ->
             val s = effective!!
             val key = TranslationStore.key(s.from.name, s.to.name, s.engine.name, s.model, config.ocrMode.name, config.font.name)
@@ -221,7 +221,7 @@ object PageColorizer {
             return base?.let { Buffer().write(it) }
         }
 
-        return translateAndDraw(context, translationConfig, imageHash, bytes, base ?: bytes, finalName!!)
+        return translateAndDraw(context, translationConfig, effective!!, imageHash, bytes, base ?: bytes, finalName!!)
             ?: base?.let { Buffer().write(it) }
     }
 
@@ -319,6 +319,7 @@ object PageColorizer {
     private suspend fun translateAndDraw(
         context: Context,
         config: TranslationConfig,
+        settings: TranslatorSettings,
         imageHash: String,
         originalBytes: ByteArray,
         baseBytes: ByteArray,
@@ -328,7 +329,7 @@ object PageColorizer {
         val page = try {
             PageTranslationService.translateNow(
                 context,
-                config.settings,
+                settings,
                 config.ocrMode,
                 imageHash,
                 config.limits,
