@@ -20,6 +20,7 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import kotlin.coroutines.cancellation.CancellationException
 import eu.kanade.tachiyomi.ui.reader.colorize.AiConfig
+
 /**
  * How pages are grouped into translator requests. A request is sent as soon as one limit is reached,
  * or when the oldest waiting page has waited [maxWaitMillis].
@@ -146,7 +147,7 @@ object PageTranslationService {
         }
         synchronized(pendingLock) { pending[translationName] }?.let { return Prepared.Waiting(it) }
 
-                val confirm = AiConfig.translation?.auto?.confirmPerPage == true
+        val confirm = AiConfig.translation?.auto?.confirmPerPage == true
         val ocrPage = ocrMutex.withLock {
             TranslationStore.load(context, Kind.OCR, ocrName) ?: run {
                 val bitmap = loadBitmap() ?: return Prepared.Ready(null)
@@ -182,15 +183,10 @@ object PageTranslationService {
             pending.getOrPut(translationName) { Pending(context, translationName, ocrPage, effective) }
         }
         return Prepared.Waiting(entry)
-
-        if (ocrPage.blocks.isEmpty()) {
-            TranslationStore.save(context, Kind.TRANSLATED, translationName, ocrPage)
-            return Prepared.Ready(null)
-        }
-
+    }
 
     /** Starts a timer so a page never waits longer than [BatchLimits.maxWaitMillis]. */
-     fun scheduleFlush(limits: BatchLimits) {
+    private fun scheduleFlush(limits: BatchLimits) {
         synchronized(pendingLock) {
             if (timer?.isActive == true) return
             timer = scope.launch {
@@ -200,7 +196,7 @@ object PageTranslationService {
         }
     }
 
-     suspend fun flush(limits: BatchLimits) {
+    private suspend fun flush(limits: BatchLimits) {
         translateMutex.withLock {
             val entries = synchronized(pendingLock) { pending.values.toList().also { pending.clear() } }
             for ((settings, group) in entries.groupBy { it.settings }) {
@@ -210,7 +206,7 @@ object PageTranslationService {
     }
 
     /** Splits waiting pages into requests of at most maxPages pages and about maxChars characters. */
-     fun chunks(entries: List<Pending>, limits: BatchLimits): List<List<Pending>> {
+    private fun chunks(entries: List<Pending>, limits: BatchLimits): List<List<Pending>> {
         val result = mutableListOf<MutableList<Pending>>()
         var chars = 0
         for (entry in entries) {
