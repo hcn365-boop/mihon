@@ -15,7 +15,7 @@ import tachiyomi.i18n.MR
 @Inject
 @SingleIn(AppScope::class)
 class ReaderPreferences(
-    preferenceStore: PreferenceStore,
+    val preferenceStore: PreferenceStore,
 ) {
 
     // region General
@@ -172,7 +172,6 @@ class ReaderPreferences(
 
     val upscaleAcceleration: Preference<String> = preferenceStore.getString("pref_upscale_accel", "CPU")
 
-    // 0 = let ONNX Runtime decide
     val aiThreads: Preference<Int> = preferenceStore.getInt("pref_ai_threads", 0)
 
     val pagePreloadCount: Preference<Int> = preferenceStore.getInt("pref_page_preload", 4)
@@ -180,8 +179,6 @@ class ReaderPreferences(
     val colorizeModelUrl: Preference<String> = preferenceStore.getString("pref_colorize_model_url", COLORIZE_MODEL_URL)
 
     val upscaleEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_upscale_enabled", false)
-    
-    // Shrink big pages before upscaling: many sites enlarge small scans, so the extra pixels carry no detail
         
     val upscaleNormalizeEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_upscale_normalize", false)
 
@@ -189,18 +186,16 @@ class ReaderPreferences(
 
     val upscaleModelUrl: Preference<String> = preferenceStore.getString("pref_upscale_model_url", UPSCALE_MODEL_URL)
 
-    // Page limits in megapixels; bigger pages are left as they are
     val colorizeMaxMegapixels: Preference<Int> = preferenceStore.getInt("pref_colorize_max_mp", 12)
 
     val upscaleMaxMegapixels: Preference<Int> = preferenceStore.getInt("pref_upscale_max_mp", 3)
 
-    // Estimated memory allowed for processing one page, in MB
+    val upscaleMaxOutputMegapixels: Preference<Int> = preferenceStore.getInt("pref_upscale_max_output_mp", 3)
+
     val aiMemoryBudgetMb: Preference<Int> = preferenceStore.getInt("pref_ai_memory_budget_mb", 1024)
 
-    // Disk cache of processed pages, in MB
     val aiCacheSizeMb: Preference<Int> = preferenceStore.getInt("pref_ai_cache_size_mb", 1024)
 
-    // How many pages ahead of the current one are processed in the background
     val colorizePreloadCount: Preference<Int> = preferenceStore.getInt("pref_colorize_preload", 3)
 
     val upscalePreloadCount: Preference<Int> = preferenceStore.getInt("pref_upscale_preload", 2)
