@@ -68,21 +68,37 @@ object AutoLanguage {
     }
 
     private val BRACKETS = Regex("""[\[(]([^\])]+)[\])]""")
+    private val SEPARATORS = Regex("""[,/;|&+\s]+""")
 
-    /** Looks inside the brackets of a title for a language name. */
+    /** Looks inside the brackets of a title for a language name, such as (Japanese) or [English, Chinese]. */
     fun languageFromTitle(title: String): TextRecognizerLanguage? {
         for (match in BRACKETS.findAll(title)) {
-            languageFromName(match.groupValues[1])?.let { return it }
+            // Every word inside the brackets is tried; the first known language wins.
+            for (word in match.groupValues[1].split(SEPARATORS)) {
+                languageFromName(word)?.let { return it }
+            }
         }
         return null
     }
 
-    private fun languageFromName(name: String): TextRecognizerLanguage? = when (name.trim().lowercase()) {
-        "japanese", "japan", "jp", "ja", "日本語", "日语" -> TextRecognizerLanguage.JAPANESE
-        "chinese", "china", "cn", "zh", "mandarin", "manhua", "中文", "汉语" -> TextRecognizerLanguage.CHINESE
-        "korean", "korea", "kr", "ko", "manhwa", "한국어" -> TextRecognizerLanguage.KOREAN
-        "english", "eng", "en" -> TextRecognizerLanguage.ENGLISH
-        else -> null
+    // Latin-script languages are read with the English OCR models.
+    private val LATIN_NAMES = setOf(
+        "spanish", "español", "espanol", "french", "français", "francais", "german", "deutsch",
+        "italian", "italiano", "portuguese", "português", "portugues", "dutch", "polish", "turkish",
+        "indonesian", "vietnamese", "romanian", "hungarian", "czech", "slovak", "croatian",
+        "slovenian", "danish", "swedish", "norwegian", "finnish",
+    )
+
+    private fun languageFromName(name: String): TextRecognizerLanguage? {
+        val word = name.trim().lowercase()
+        return when {
+            word in setOf("japanese", "japan", "jp", "ja", "日本語", "日语") -> TextRecognizerLanguage.JAPANESE
+            word in setOf("chinese", "china", "cn", "zh", "mandarin", "manhua", "中文", "汉语") ->
+                TextRecognizerLanguage.CHINESE
+            word in setOf("korean", "korea", "kr", "ko", "manhwa", "한국어") -> TextRecognizerLanguage.KOREAN
+            word in setOf("english", "eng", "en") || word in LATIN_NAMES -> TextRecognizerLanguage.ENGLISH
+            else -> null
+        }
     }
 
     /**
