@@ -127,7 +127,7 @@ class ReaderPreferences(
         false,
     )
 
-    val dualPageRotateToFitWebtoon: Preference<Boolean>    val dualPageRotateToFitWebtoon: Preference<Boolean> = preferenceStore.getBoolean(
+    val dualPageRotateToFitWebtoon: Preference<Boolean> = preferenceStore.getBoolean(
         "pref_dual_page_rotate_webtoon",
         false,
     )
@@ -207,26 +207,22 @@ class ReaderPreferences(
     
     // endregion
 
-        // region Translation
-    // Choose the page language for each manga: manual choice, then title tag, then source language
+    // region Translation
+
     val translateAutoLanguage: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_auto_language", false)
 
     val translateAutoFromTitle: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_auto_title", true)
 
     val translateAutoFromSource: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_auto_source", true)
 
-    // After OCR, check the language of the text and read the page again if it differs
     val translateConfirmLanguage: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_confirm_language", false)
 
-    // Language chosen by hand for one manga; empty means automatic
     fun mangaLanguage(mangaId: Long): Preference<String> =
         preferenceStore.getString("pref_translate_from_manga_$mangaId", "")
         
-    // True when this manga uses its own settings instead of the general ones
     fun mangaOverride(mangaId: Long): Preference<Boolean> =
         preferenceStore.getBoolean("pref_translate_manga_override_$mangaId", false)
 
-    /** The same setting kept separately for one manga. */
     @Suppress("UNCHECKED_CAST")
     fun <T> scoped(pref: Preference<T>, mangaId: Long): Preference<T> {
         val key = "${pref.key()}_m$mangaId"
@@ -240,12 +236,10 @@ class ReaderPreferences(
 
     val translateEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_enabled", false)
 
-    // Names of the TextRecognizerLanguage / TextTranslatorLanguage entries
     val translateFrom: Preference<String> = preferenceStore.getString("pref_translate_from", "JAPANESE")
 
     val translateTo: Preference<String> = preferenceStore.getString("pref_translate_to", "ARABIC")
 
-    // Name of a TextTranslators entry
     val translationEngine: Preference<String> = preferenceStore.getString("pref_translate_engine", "MLKIT")
 
     val translationModel: Preference<String> = preferenceStore.getString("pref_translate_model", "")
@@ -258,10 +252,8 @@ class ReaderPreferences(
 
     val translationServerUrl: Preference<String> = preferenceStore.getString("pref_translate_server_url", "")
 
-    // Name of an OcrMode entry: MLKIT, PADDLE or HYBRID
     val translationOcrMode: Preference<String> = preferenceStore.getString("pref_translate_ocr_mode", "MLKIT")
 
-    // Name of a TranslationFont entry
     val translationFont: Preference<String> = preferenceStore.getString("pref_translate_font", "SYSTEM")
 
     val translatePagesPerRequest: Preference<Int> = preferenceStore.getInt("pref_translate_pages_per_request", 4)
