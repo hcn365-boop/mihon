@@ -337,6 +337,8 @@ dependencies {
     implementation(libs.mlkit.text.recognition.chinese)
     implementation(libs.mlkit.text.translate)
     implementation(libs.google.generativeai)
+    implementation("com.google.mlkit:language-id:17.0.6")
+
 
     // For detecting memory leaks; see https://square.github.io/leakcanary/
     // debugImplementation(libs.leakCanary.android)
