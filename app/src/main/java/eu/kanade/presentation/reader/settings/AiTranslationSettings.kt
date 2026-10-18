@@ -36,7 +36,7 @@ import eu.kanade.translation.MangaTranslationContext
 
 /** Translation part of the AI tab. Texts are plain strings for now. */
 @Composable
-internal fun TranslationSection(prefs: ReaderPreferences) {
+internal fun TranslationSection(prefs: AiPrefs) {
     val context = LocalContext.current
     val enabled by prefs.translateEnabled.collectAsState()
     CheckboxItem(label = "Translate pages", pref = prefs.translateEnabled)
