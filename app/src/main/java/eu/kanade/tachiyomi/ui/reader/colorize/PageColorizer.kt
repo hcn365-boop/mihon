@@ -20,7 +20,7 @@ import java.security.MessageDigest
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
-
+import eu.kanade.translation.translator.TranslatorSettings
 
 /**
  * Processes a manga page for the reader: colorize, then upscale, then translate (text drawn into the
@@ -212,7 +212,7 @@ object PageColorizer {
             var ocrBitmap: Bitmap? = null
             try {
                 val s = translationConfig
-                PageTranslationService.enqueue(context, s.settings, s.ocrMode, imageHash, s.limits) {
+                PageTranslationService.enqueue(context, effective!!, s.ocrMode, imageHash, s.limits) {
                     decode(bytes).also { ocrBitmap = it }
                 }
             } finally {
