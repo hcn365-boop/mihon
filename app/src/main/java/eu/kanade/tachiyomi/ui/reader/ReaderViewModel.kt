@@ -91,7 +91,7 @@ import tachiyomi.source.local.image.LocalCoverManager
 import tachiyomi.source.local.isLocal
 import java.util.Date
 import kotlin.time.Clock
-
+import eu.kanade.translation.MangaTranslationContext
 /**
  * Presenter used by the activity to perform background operations.
  */
@@ -329,6 +329,7 @@ class ReaderViewModel(
             try {
                 val manga = getManga.await(mangaId) ?: error("Requested manga of id $mangaId not found")
                 val source = sourceManager.getOrStub(manga.source)
+                MangaTranslationContext.update(manga.id, manga.title, source.lang)
                 incognitoMode = getIncognitoState.await(manga.source)
                 mutableState.update { it.copy(manga = manga, source = source) }
                 if (chapterId == -1L) chapterId = initialChapterId
