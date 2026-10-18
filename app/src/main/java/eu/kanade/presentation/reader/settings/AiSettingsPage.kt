@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.ui.reader.colorize.ColorizerModelInstaller
 import eu.kanade.tachiyomi.ui.reader.colorize.ModelKind
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsViewModel
+import eu.kanade.tachiyomi.ui.reader.setting.AiPrefs
+import eu.kanade.tachiyomi.ui.reader.setting.MangaTranslationContext
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.presentation.core.components.CheckboxItem
@@ -34,7 +36,25 @@ import kotlin.coroutines.cancellation.CancellationException
 /** AI tab of the reader settings. Texts are plain strings for now. */
 @Composable
 internal fun ColumnScope.AiPage(viewModel: ReaderSettingsViewModel) {
-    val prefs = viewModel.preferences
+    val base = viewModel.preferences
+    val mangaId = MangaTranslationContext.mangaId
+    val ownPref = remember(mangaId) { if (mangaId >= 0) base.mangaOverride(mangaId) else null }
+    val ownOn = ownPref?.collectAsState()?.value == true
+    // The settings shown below are the manga's own when the box is checked, the general ones otherwise.
+    val prefs = remember(mangaId, ownOn) { AiPrefs(base, if (ownOn) mangaId else null) }
+
+    if (ownPref != null) {
+        CheckboxItem(
+            label = "Use separate settings for this manga",
+            checked = ownOn,
+            onClick = {
+                // Its own settings start as a copy of the general ones.
+                if (!ownOn) AiPrefs(base, mangaId).copyGeneralSettings()
+                ownPref.set(!ownOn)
+            },
+        )
+    }
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf("") }
