@@ -19,7 +19,7 @@ import kotlinx.coroutines.sync.withLock
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import kotlin.coroutines.cancellation.CancellationException
-import eu.kanade.tachiyomi.ui.reader.colorize
+import eu.kanade.tachiyomi.ui.reader.colorize.AiConfig
 /**
  * How pages are grouped into translator requests. A request is sent as soon as one limit is reached,
  * or when the oldest waiting page has waited [maxWaitMillis].
