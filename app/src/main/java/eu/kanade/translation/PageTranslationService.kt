@@ -187,11 +187,7 @@ object PageTranslationService {
             TranslationStore.save(context, Kind.TRANSLATED, translationName, ocrPage)
             return Prepared.Ready(null)
         }
-        val entry = synchronized(pendingLock) {
-            pending.getOrPut(translationName) { Pending(context, translationName, ocrPage, settings) }
-        }
-        return Prepared.Waiting(entry)
-    }
+
 
     /** Starts a timer so a page never waits longer than [BatchLimits.maxWaitMillis]. */
     private fun scheduleFlush(limits: BatchLimits) {
