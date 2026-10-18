@@ -25,7 +25,7 @@ import eu.kanade.tachiyomi.ui.reader.colorize.ColorizerModelInstaller
 import eu.kanade.tachiyomi.ui.reader.colorize.ModelKind
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsViewModel
 import eu.kanade.tachiyomi.ui.reader.setting.AiPrefs
-import eu.kanade.tachiyomi.ui.reader.setting.MangaTranslationContext
+import eu.kanade.translation.MangaTranslationContext
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.presentation.core.components.CheckboxItem
