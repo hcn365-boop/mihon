@@ -221,6 +221,10 @@ class ReaderPreferences(
     // Language chosen by hand for one manga; empty means automatic
     fun mangaLanguage(mangaId: Long): Preference<String> =
         preferenceStore.getString("pref_translate_from_manga_$mangaId", "")
+        
+    // True when this manga uses its own settings instead of the general ones
+    fun mangaOverride(mangaId: Long): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_translate_manga_override_$mangaId", false)
 
     val translateEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_enabled", false)
 
