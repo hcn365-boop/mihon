@@ -190,7 +190,7 @@ object PageTranslationService {
 
 
     /** Starts a timer so a page never waits longer than [BatchLimits.maxWaitMillis]. */
-    private fun scheduleFlush(limits: BatchLimits) {
+     fun scheduleFlush(limits: BatchLimits) {
         synchronized(pendingLock) {
             if (timer?.isActive == true) return
             timer = scope.launch {
@@ -200,7 +200,7 @@ object PageTranslationService {
         }
     }
 
-    private suspend fun flush(limits: BatchLimits) {
+     suspend fun flush(limits: BatchLimits) {
         translateMutex.withLock {
             val entries = synchronized(pendingLock) { pending.values.toList().also { pending.clear() } }
             for ((settings, group) in entries.groupBy { it.settings }) {
@@ -210,7 +210,7 @@ object PageTranslationService {
     }
 
     /** Splits waiting pages into requests of at most maxPages pages and about maxChars characters. */
-    private fun chunks(entries: List<Pending>, limits: BatchLimits): List<List<Pending>> {
+     fun chunks(entries: List<Pending>, limits: BatchLimits): List<List<Pending>> {
         val result = mutableListOf<MutableList<Pending>>()
         var chars = 0
         for (entry in entries) {
