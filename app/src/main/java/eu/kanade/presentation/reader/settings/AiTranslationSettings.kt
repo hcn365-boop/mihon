@@ -47,6 +47,14 @@ internal fun TranslationSection(prefs: ReaderPreferences) {
         pref = prefs.translateFrom,
         options = TextRecognizerLanguage.entries.map { it.name to readable(it.name) },
     )
+        CheckboxItem(label = "Choose the page language automatically for each manga", pref = prefs.translateAutoLanguage)
+    val autoLanguage by prefs.translateAutoLanguage.collectAsState()
+    if (autoLanguage) {
+        CheckboxItem(label = "Read it from the title tags, like (Japanese)", pref = prefs.translateAutoFromTitle)
+        CheckboxItem(label = "Use the language of the source", pref = prefs.translateAutoFromSource)
+    }
+    CheckboxItem(label = "Check each page's language after reading it (ML Kit)", pref = prefs.translateConfirmLanguage)
+    MangaSettingsSection(prefs)
     ChoiceRow(
         label = "Translate to",
         pref = prefs.translateTo,
@@ -122,6 +130,25 @@ private fun ScaledChars(label: String, pref: Preference<Int>) {
         valueString = "${steps * 100}",
         onChange = { pref.set(it * 100) },
     )
+}
+
+/** Settings of the manga being read. Shown only while a manga is open. */
+@Composable
+private fun MangaSettingsSection(prefs: ReaderPreferences) {
+    val mangaId = MangaTranslationContext.mangaId
+    if (mangaId < 0) return
+    val override = remember(mangaId) { prefs.mangaOverride(mangaId) }
+    CheckboxItem(label = "Use separate settings for this manga", pref = override)
+    val own by override.collectAsState()
+    if (own) {
+        val language = remember(mangaId) { prefs.mangaLanguage(mangaId) }
+        ChoiceRow(
+            label = "Language of this manga",
+            pref = language,
+            options = listOf("" to "Automatic") +
+                TextRecognizerLanguage.entries.map { it.name to it.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
+        )
+    }
 }
 
 @Composable
