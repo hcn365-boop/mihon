@@ -127,7 +127,7 @@ class ReaderPreferences(
         false,
     )
 
-    val dualPageRotateToFitWebtoon: Preference<Boolean> = preferenceStore.getBoolean(
+    val dualPageRotateToFitWebtoon: Preference<Boolean>    val dualPageRotateToFitWebtoon: Preference<Boolean> = preferenceStore.getBoolean(
         "pref_dual_page_rotate_webtoon",
         false,
     )
@@ -225,6 +225,18 @@ class ReaderPreferences(
     // True when this manga uses its own settings instead of the general ones
     fun mangaOverride(mangaId: Long): Preference<Boolean> =
         preferenceStore.getBoolean("pref_translate_manga_override_$mangaId", false)
+
+    /** The same setting kept separately for one manga. */
+    @Suppress("UNCHECKED_CAST")
+    fun <T> scoped(pref: Preference<T>, mangaId: Long): Preference<T> {
+        val key = "${pref.key()}_m$mangaId"
+        return when (val default = pref.defaultValue()) {
+            is Boolean -> preferenceStore.getBoolean(key, default)
+            is Int -> preferenceStore.getInt(key, default)
+            is String -> preferenceStore.getString(key, default)
+            else -> error("Unsupported setting type for $key")
+        } as Preference<T>
+    }
 
     val translateEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_enabled", false)
 
