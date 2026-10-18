@@ -146,17 +146,42 @@ object PageTranslationService {
         }
         synchronized(pendingLock) { pending[translationName] }?.let { return Prepared.Waiting(it) }
 
+                val confirm = AiConfig.translation?.auto?.confirmPerPage == true
         val ocrPage = ocrMutex.withLock {
             TranslationStore.load(context, Kind.OCR, ocrName) ?: run {
                 val bitmap = loadBitmap() ?: return Prepared.Ready(null)
-                val found = session(context, settings.from, ocrMode).extractor.extract(bitmap)
-                // A page without text is stored too (as an empty page), so OCR does not run on it again.
+                var language = settings.from
+                var found = session(context, language, ocrMode).extractor.extract(bitmap)
+                if (confirm && found != null) {
+                    val detected = OcrLanguageCheck.detect(found.blocks.joinToString("\n") { it.text })
+                    if (detected != null && detected != language) {
+                        // The text is in another language than expected: read the page again with the right one.
+                        val again = session(context, detected, ocrMode).extractor.extract(bitmap)
+                        if (again != null) {
+                            found = again
+                            language = detected
+                        }
+                    }
+                }
+                TranslationStore.saveText(context, Kind.LANGUAGE, ocrName, language.name)
                 val result = found ?: PageTranslation(imgWidth = bitmap.width.toFloat(), imgHeight = bitmap.height.toFloat())
-                // Saved before translating, because the translator fills in the blocks in place.
                 TranslationStore.save(context, Kind.OCR, ocrName, result)
                 result
             }
         }
+
+        if (ocrPage.blocks.isEmpty()) {
+            TranslationStore.save(context, Kind.TRANSLATED, translationName, ocrPage)
+            return Prepared.Ready(null)
+        }
+        // Translate from the language the page was really read with.
+        val usedName = TranslationStore.loadText(context, Kind.LANGUAGE, ocrName)
+        val used = TextRecognizerLanguage.entries.firstOrNull { it.name == usedName } ?: settings.from
+        val effective = if (used == settings.from) settings else settings.copy(from = used)
+        val entry = synchronized(pendingLock) {
+            pending.getOrPut(translationName) { Pending(context, translationName, ocrPage, effective) }
+        }
+        return Prepared.Waiting(entry)
 
         if (ocrPage.blocks.isEmpty()) {
             TranslationStore.save(context, Kind.TRANSLATED, translationName, ocrPage)
