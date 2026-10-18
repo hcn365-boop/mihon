@@ -190,8 +190,9 @@ object PageColorizer {
         val imageHash = hash(bytes)
         val shrinkSide = if (doShrink) normalize else 0
         val baseName = baseName(imageHash, if (doColor) intensity else -1f, doUpscale, shrinkSide, colorModel, upscaleModel)
+                val effective = translationConfig?.effectiveSettings()
         val finalName = translationConfig?.let { config ->
-            val s = config.settings
+            val s = effective!!
             val key = TranslationStore.key(s.from.name, s.to.name, s.engine.name, s.model, config.ocrMode.name, config.font.name)
             "${baseName}_T$key"
         }
