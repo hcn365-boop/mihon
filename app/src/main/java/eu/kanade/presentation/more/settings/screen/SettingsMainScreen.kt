@@ -190,9 +190,6 @@ object SettingsMainScreen : Screen() {
             screen = SettingsReaderScreen,
         ),
          Item(
-            titleRes = "translation and colorizing and upscaling",
-            subtitleRes = "translation and colorizing and upscaling",
-            icon = ,
             screen = SettingsAiScreen,
         ),
         Item(
