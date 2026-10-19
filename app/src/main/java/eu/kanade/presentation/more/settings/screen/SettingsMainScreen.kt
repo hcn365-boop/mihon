@@ -189,9 +189,6 @@ object SettingsMainScreen : Screen() {
             icon = MaterialSymbols.AutoMirroredRounded.ChromeReaderMode,
             screen = SettingsReaderScreen,
         ),
-         Item(
-            screen = SettingsAiScreen,
-        ),
         Item(
             titleRes = MR.strings.pref_category_downloads,
             subtitleRes = MR.strings.pref_downloads_summary,
@@ -215,6 +212,9 @@ object SettingsMainScreen : Screen() {
             subtitleRes = MR.strings.pref_backup_summary,
             icon = MaterialSymbols.Rounded.Storage,
             screen = SettingsDataScreen,
+        ),
+        Item(
+            screen = SettingsAiScreen,
         ),
         Item(
             titleRes = MR.strings.pref_category_security,
