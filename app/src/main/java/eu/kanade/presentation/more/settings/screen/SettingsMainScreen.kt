@@ -189,6 +189,12 @@ object SettingsMainScreen : Screen() {
             icon = MaterialSymbols.AutoMirroredRounded.ChromeReaderMode,
             screen = SettingsReaderScreen,
         ),
+         Item(
+            titleRes = "translation and colorizing and upscaling",
+            subtitleRes = "translation and colorizing and upscaling",
+            icon = ,
+            screen = SettingsAiScreen,
+        ),
         Item(
             titleRes = MR.strings.pref_category_downloads,
             subtitleRes = MR.strings.pref_downloads_summary,
