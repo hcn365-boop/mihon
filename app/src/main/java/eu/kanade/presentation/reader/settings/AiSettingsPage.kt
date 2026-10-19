@@ -55,6 +55,12 @@ internal fun ColumnScope.AiPage(viewModel: ReaderSettingsViewModel) {
         )
     }
 
+    AiSettingsContent(prefs)
+}
+
+/** The AI settings, shared by the reader tab and by the app's settings screen. */
+@Composable
+internal fun AiSettingsContent(prefs: AiPrefs) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf("") }
