@@ -214,6 +214,9 @@ object SettingsMainScreen : Screen() {
             screen = SettingsDataScreen,
         ),
         Item(
+            titleRes = MR.strings.pref_category_ai,
+            subtitleRes = MR.strings.pref_ai_summary,
+            icon = MaterialSymbols.Rounded.Palette,
             screen = SettingsAiScreen,
         ),
         Item(
