@@ -89,6 +89,9 @@ internal fun TranslationSection(prefs: AiPrefs) {
     if (engine == TextTranslators.LIBRETRANSLATE || engine == TextTranslators.LMSTUDIO) {
         TextSetting("Server address", prefs.translationServerUrl)
     }
+
+    TSlider("Bubble expansion & padding", prefs.translateCollisionPadding, 100..200) { "$it%" }
+
     TSlider("Pages per request", prefs.translatePagesPerRequest, 1..10) { "$it" }
     ScaledChars("Max characters per request", prefs.translateMaxChars)
     TSlider("Wait before sending a partial request", prefs.translateMaxWaitSeconds, 1..30) { "$it s" }
