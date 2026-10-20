@@ -203,6 +203,8 @@ class ReaderPreferences(
     // endregion
 
     // region Translation
+    
+    val translateCollisionPadding: Preference<Int> = preferenceStore.getInt("pref_translate_collision_padding", 130)
 
     val translateAutoLanguage: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_auto_language", false)
 
