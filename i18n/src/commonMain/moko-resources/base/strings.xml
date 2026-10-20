@@ -10,6 +10,8 @@
     <string name="action_menu_overflow_description">More options</string>
     <string name="action_bar_up_description">Navigate up</string>
 
+    <string name="pref_category_ai">AI and translation</string>
+    <string name="pref_ai_summary">Colorize, upscale and translate pages</string>
     <!-- Models -->
     <string name="name">Name</string>
     <string name="categories">Categories</string>
