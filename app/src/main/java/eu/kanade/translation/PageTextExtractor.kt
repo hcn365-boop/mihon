@@ -13,6 +13,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import tachiyomi.core.common.util.system.logcat
 import logcat.LogPriority
+import eu.kanade.tachiyomi.ui.reader.colorize.AiConfig // استيراد إعدادات الذكاء الاصطناعي
 
 /** Which OCR engine reads the page. HYBRID runs both and combines the results. */
 enum class OcrMode { MLKIT, PADDLE, HYBRID }
@@ -52,8 +53,17 @@ class PageTextExtractor(
         if (boxes.isEmpty()) return null
 
         val page = PageTranslation(imgWidth = bitmap.width.toFloat(), imgHeight = bitmap.height.toFloat())
-        // الدمج + التوسيع + منع تصادم الفقاعات — نفس منطق ChapterTranslator
-        page.blocks = TextBlockMerger.merge(boxes.map { it.toBlock() }, bitmap.width.toFloat(), bitmap.height.toFloat())
+        
+        // جلب قيمة التكبير/التوسيع المخصصة من الإعدادات عبر AiConfig (القيمة الافتراضية 1.3f)
+        val paddingFactor = AiConfig.translateCollisionPadding
+        
+        // الدمج + التوسيع بناءً على الإعداد + منع تصادم الفقاعات
+        page.blocks = TextBlockMerger.merge(
+            blocks = boxes.map { it.toBlock() }, 
+            imgWidth = bitmap.width.toFloat(), 
+            imgHeight = bitmap.height.toFloat(),
+            collisionPaddingFactor = paddingFactor
+        )
         return page.takeIf { it.blocks.isNotEmpty() }
     }
 
@@ -138,13 +148,18 @@ class PageTextExtractor(
 }
 
 
-    internal object TextBlockMerger {
+internal object TextBlockMerger {
 
     // تعريف الأنماط
     private val urlPattern = Regex("(?i)(https?://\\S+|www\\.\\S+|\\S+\\.(com|net|org|io|me|cc|tv|info))")
     private val symbolsFilterPattern = Regex("""[_~•°^@#$&|\\-]""")
 
-    fun merge(blocks: List<TranslationBlock>, imgWidth: Float, imgHeight: Float): MutableList<TranslationBlock> {
+    fun merge(
+        blocks: List<TranslationBlock>, 
+        imgWidth: Float, 
+        imgHeight: Float, 
+        collisionPaddingFactor: Float = 1.3f
+    ): MutableList<TranslationBlock> {
         if (blocks.isEmpty()) return mutableListOf()
 
         // تطبيق الفلاتر واستبعاد الصناديق الفارغة أو التي تحتوي فقط على روابط أو رموز مزعجة
@@ -201,9 +216,7 @@ class PageTextExtractor(
         }.toMutableList()
 
         // ═══════════════════════════════════════════════════════════════
-        // التوسيع (Expansion) — نفس منطق ChapterTranslator
-        // عند استخراج النص تكون الترجمة فارغة، فيكون المعامل = 1.0
-        // وتبقى فقط هوامش الأمان 1.3x لمنع التصاق الفقاعات بالحواف
+        // التوسيع (Expansion) — باستخدام معامل التكبير القادم من الإعدادات
         // ═══════════════════════════════════════════════════════════════
         val expandedBlocks = mergedBlocks.map { block ->
             val cleanedText = block.text.replace("\n", " ").trim()
@@ -217,9 +230,9 @@ class PageTextExtractor(
             var newWidth: Float
             if (abs(block.angle) in 70.0..110.0) {
                 newHeight = block.height * finalScale
-                newWidth = block.width * finalScale * 1.3f
+                newWidth = block.width * finalScale * collisionPaddingFactor
             } else {
-                newHeight = block.height * finalScale * 1.3f
+                newHeight = block.height * finalScale * collisionPaddingFactor
                 newWidth = block.width * finalScale
             }
 
@@ -237,7 +250,7 @@ class PageTextExtractor(
         }.toMutableList()
 
         // ═══════════════════════════════════════════════════════════════
-        // منع تصادم الفقاعات — نفس آلية ChapterTranslator.resolveCollisions
+        // منع تصادم الفقاعات — مع العودة للحجم الأساسي عند التعذر
         // ═══════════════════════════════════════════════════════════════
         resolveCollisions(expandedBlocks, imgWidth, imgHeight)
         return expandedBlocks
@@ -297,7 +310,8 @@ class PageTextExtractor(
                     }
 
                     if (!foundValid || bestCollisions >= countCollisions(movingBlock, blocks, movingIdx)) {
-                        val shrinkFactor = 0.88f
+                        // تعديل جذري: عند استمرار التصادم، يتم إلغاء التوسعة وإرجاع الفقاعة لحجمها الأساسي (1.0) لتفريغ المساحة فوراً
+                        val shrinkFactor = 1.0f / AiConfig.translateCollisionPadding.coerceAtLeast(1.0f)
                         val newW = movingBlock.width * shrinkFactor
                         val newH = movingBlock.height * shrinkFactor
                         movingBlock = movingBlock.copy(
