@@ -172,6 +172,9 @@ object AiConfig {
         bind(p.upscaleAcceleration, false) { upscaleAcceleration = Acceleration.fromName(it) }
         bind(p.aiThreads, false) { aiThreads = it }
 
+        bind(p.translateCollisionPadding, true) { translateCollisionPadding = it / 100f }
+
+        
         // Every translation setting rebuilds the whole snapshot, so it is never half updated.
         translation = buildTranslation(p)
         p.translationPrefs.forEach { pref ->
