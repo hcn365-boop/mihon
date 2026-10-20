@@ -91,6 +91,9 @@ object AiConfig {
 
     /** Translation settings, or null when translation is off. */
     @Volatile var translation: TranslationConfig? = null
+    
+    @Volatile var translateCollisionPadding: Float = 1.3f
+    
 
     val anyEnabled: Boolean
         get() = colorizeEnabled || upscaleEnabled || upscaleNormalizeEnabled || translation != null
