@@ -108,6 +108,7 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         reset(translatePagesPerRequest)
         reset(translateMaxChars)
         reset(translateMaxWaitSeconds)
+        reset(translateCollisionPadding)
     }
     
     /** Gives this manga a copy of the general settings, so its own settings start from what you have now. */
@@ -135,5 +136,6 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         copy(base.translateAutoFromTitle)
         copy(base.translateAutoFromSource)
         copy(base.translateConfirmLanguage)
+        copy(base.translateCollisionPadding)
     }
 }
