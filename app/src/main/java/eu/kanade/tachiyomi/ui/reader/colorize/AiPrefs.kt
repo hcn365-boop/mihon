@@ -73,6 +73,43 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         translateMaxWaitSeconds,
     )
 
+        /** Puts the settings of this scope back to their defaults. Keys, server addresses and model links are kept. */
+    fun resetToDefaults() {
+        fun <T> reset(pref: Preference<T>) = pref.set(pref.defaultValue())
+        reset(colorizeEnabled)
+        reset(colorizeIntensity)
+        reset(colorizeMaxMegapixels)
+        reset(colorizePreloadCount)
+        reset(upscaleEnabled)
+        reset(upscaleMaxMegapixels)
+        reset(upscaleMaxOutputMegapixels)
+        reset(upscaleNormalizeEnabled)
+        reset(upscaleNormalizeShortSide)
+        reset(upscalePreloadCount)
+        reset(translateEnabled)
+        reset(translateFrom)
+        reset(translateTo)
+        reset(translationEngine)
+        reset(translationOcrMode)
+        reset(translationFont)
+        reset(translatePreloadCount)
+        reset(translateAutoLanguage)
+        reset(translateAutoFromTitle)
+        reset(translateAutoFromSource)
+        reset(translateConfirmLanguage)
+        reset(colorizeAcceleration)
+        reset(upscaleAcceleration)
+        reset(aiThreads)
+        reset(aiMemoryBudgetMb)
+        reset(aiCacheSizeMb)
+        reset(pagePreloadCount)
+        reset(translationTemperature)
+        reset(translationMaxTokens)
+        reset(translatePagesPerRequest)
+        reset(translateMaxChars)
+        reset(translateMaxWaitSeconds)
+    }
+    
     /** Gives this manga a copy of the general settings, so its own settings start from what you have now. */
     fun copyGeneralSettings() {
         val id = mangaId ?: return
