@@ -260,6 +260,22 @@ class ReaderPreferences(
     val translateMaxWaitSeconds: Preference<Int> = preferenceStore.getInt("pref_translate_max_wait_s", 8)
 
     val translatePreloadCount: Preference<Int> = preferenceStore.getInt("pref_translate_preload", 3)
+        // Remove bubbles that contain certain words (separated by commas)
+    val translateFilterWordsEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_filter_words_enabled", false)
+
+    val translateFilterWords: Preference<String> = preferenceStore.getString("pref_translate_filter_words", "")
+
+    // Remove Latin bubbles with fewer different letters than this
+    val translateLatinFilterEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_latin_filter", false)
+
+    val translateLatinMinLetters: Preference<Int> = preferenceStore.getInt("pref_translate_latin_min_letters", 3)
+
+    // Do not translate a page that is already in the target language, unless asked
+    val translateSkipSameLanguage: Preference<Boolean> = preferenceStore.getBoolean("pref_translate_skip_same_language", false)
+
+    // Set by hand for one manga: translate it even if its language is the target language
+    fun mangaForceTranslate(mangaId: Long): Preference<Boolean> =
+        preferenceStore.getBoolean("pref_translate_force_m$mangaId", false)
 
     // endregion
 
