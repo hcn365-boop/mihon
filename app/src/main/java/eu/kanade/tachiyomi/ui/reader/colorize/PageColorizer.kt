@@ -194,7 +194,10 @@ object PageColorizer {
         val effective = translationConfig?.effectiveSettings()
         val finalName = translationConfig?.let { config ->
             val s = effective!!
-            val key = TranslationStore.key(s.from.name, s.to.name, s.engine.name, s.model, config.ocrMode.name, config.font.name)
+            val key = TranslationStore.key(
+                s.from.name, s.to.name, s.engine.name, s.model, config.ocrMode.name, config.font.name,
+                config.filter.signature, AiConfig.forceTranslate(MangaTranslationContext.mangaId).toString(),
+            )
             "${baseName}_T$key"
         }
 
