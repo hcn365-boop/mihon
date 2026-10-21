@@ -40,7 +40,14 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
     val translateAutoFromTitle: Preference<Boolean> = own(base.translateAutoFromTitle)
     val translateAutoFromSource: Preference<Boolean> = own(base.translateAutoFromSource)
     val translateConfirmLanguage: Preference<Boolean> = own(base.translateConfirmLanguage)
-    val translateCollisionPadding: Preference<Int> = own(base.translateCollisionPadding) // <--- أضيفت هنا
+    val translateCollisionPadding: Preference<Int> = own(base.translateCollisionPadding)
+        val translateFilterWordsEnabled: Preference<Boolean> = own(base.translateFilterWordsEnabled)
+    val translateFilterWords: Preference<String> = own(base.translateFilterWords)
+    val translateLatinFilterEnabled: Preference<Boolean> = own(base.translateLatinFilterEnabled)
+    val translateLatinMinLetters: Preference<Int> = own(base.translateLatinMinLetters)
+    val translateSkipSameLanguage: Preference<Boolean> = own(base.translateSkipSameLanguage)
+
+    fun forceTranslate(mangaId: Long): Preference<Boolean> = base.mangaForceTranslate(mangaId)
 
     // endregion
 
