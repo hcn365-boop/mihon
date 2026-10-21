@@ -55,12 +55,15 @@ internal fun ColumnScope.AiPage(viewModel: ReaderSettingsViewModel) {
         )
     }
 
-    AiSettingsContent(prefs)
+    AiSettingsContent(prefs, inReader = true)
 }
 
 /** The AI settings, shared by the reader tab and by the app's settings screen. */
 @Composable
-internal fun AiSettingsContent(prefs: AiPrefs) {
+internal fun AiSettingsContent(
+    prefs: AiPrefs,
+    inReader: Boolean = false,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf("") }
@@ -112,7 +115,7 @@ internal fun AiSettingsContent(prefs: AiPrefs) {
         IntSlider("Shrink to short side", prefs.upscaleNormalizeShortSide, 600..1600) { "$it px" }
     }
     
-    TranslationSection(prefs)
+    TranslationSection(prefs, inReader)
 
     // endregion
 
