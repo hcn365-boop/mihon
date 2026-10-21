@@ -21,6 +21,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import eu.kanade.translation.translator.TranslatorSettings
+import eu.kanade.translation.MangaTranslationContext
 
 /**
  * Processes a manga page for the reader: colorize, then upscale, then translate (text drawn into the
