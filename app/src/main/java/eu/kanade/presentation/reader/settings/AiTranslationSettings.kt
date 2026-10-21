@@ -38,7 +38,8 @@ import eu.kanade.tachiyomi.ui.reader.colorize.AiPrefs
 
 /** Translation part of the AI tab. Texts are plain strings for now. */
 @Composable
-internal fun TranslationSection(prefs: AiPrefs, inReader: Boolean = false)    val context = LocalContext.current
+internal fun TranslationSection(prefs: AiPrefs, inReader: Boolean = false) {
+    val context = LocalContext.current
     val enabled by prefs.translateEnabled.collectAsState()
     CheckboxItem(label = "Translate pages", pref = prefs.translateEnabled)
     if (!enabled) return
@@ -56,12 +57,8 @@ internal fun TranslationSection(prefs: AiPrefs, inReader: Boolean = false)    va
         CheckboxItem(label = "Use the language of the source", pref = prefs.translateAutoFromSource)
     }
     CheckboxItem(label = "Check each page's language after reading it (ML Kit)", pref = prefs.translateConfirmLanguage)
-    ChoiceRow(
-        label = "Translate to",
-        pref = prefs.translateTo,
-        options = TextTranslatorLanguage.entries.map { it.name to readable(it.name) },
-    )
-        CheckboxItem(label = "Remove bubbles that contain certain words", pref = prefs.translateFilterWordsEnabled)
+    
+    CheckboxItem(label = "Remove bubbles that contain certain words", pref = prefs.translateFilterWordsEnabled)
     val filterWords by prefs.translateFilterWordsEnabled.collectAsState()
     if (filterWords) {
         TextSetting("Words, separated by commas", prefs.translateFilterWords)
@@ -81,6 +78,12 @@ internal fun TranslationSection(prefs: AiPrefs, inReader: Boolean = false)    va
             Text(if (forced) "Stop translating this manga when the language is the same" else "Translate this manga anyway")
         }
     }
+
+    ChoiceRow(
+        label = "Translate to",
+        pref = prefs.translateTo,
+        options = TextTranslatorLanguage.entries.map { it.name to readable(it.name) },
+    )
     ChoiceRow(
         label = "Translation engine",
         pref = prefs.translationEngine,
