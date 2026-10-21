@@ -6,6 +6,7 @@ import eu.kanade.translation.AutoLanguageOptions
 import eu.kanade.translation.BatchLimits
 import eu.kanade.translation.MangaTranslationContext
 import eu.kanade.translation.OcrMode
+import eu.kanade.translation.PageFilterOptions
 import eu.kanade.translation.TranslationFont
 import eu.kanade.translation.recognizer.TextRecognizerLanguage
 import eu.kanade.translation.translator.TextTranslatorLanguage
@@ -31,6 +32,7 @@ class TranslationConfig(
     /** How many pages ahead are read (OCR) and queued for translation in the background. */
     val preload: Int,
     val auto: AutoLanguageOptions,
+    val filter: PageFilterOptions,
 ) {
     /** The settings with the page language chosen for the manga being read (when auto language is on). */
     fun effectiveSettings(): TranslatorSettings {
@@ -103,6 +105,10 @@ object AiConfig {
     private var onOutputChanged: (() -> Unit)? = null
     private var bindJob: Job? = null
     private var notifyJob: Job? = null
+
+    /** True when the user asked to translate this manga even if the page language is the target language. */
+    fun forceTranslate(mangaId: Long): Boolean =
+        mangaId >= 0 && prefsRef?.mangaForceTranslate(mangaId)?.get() == true
 
     /**
      * Copies the preferences now and whenever they change.
@@ -195,6 +201,12 @@ object AiConfig {
                 .drop(1)
                 .onEach { bindAll(notify = true) }
                 .launchIn(bindScope)
+
+            prefs.mangaForceTranslate(mangaId).changes()
+                .distinctUntilChanged()
+                .drop(1)
+                .onEach { notifyChanged() }
+                .launchIn(bindScope)
         }
 
         if (notify) notifyChanged()
@@ -231,6 +243,16 @@ object AiConfig {
                 fromTitle = p.translateAutoFromTitle.get(),
                 fromSource = p.translateAutoFromSource.get(),
                 confirmPerPage = p.translateConfirmLanguage.get(),
+            ),
+            filter = PageFilterOptions(
+                words = if (p.translateFilterWordsEnabled.get()) {
+                    PageFilterOptions.parseWords(p.translateFilterWords.get())
+                } else {
+                    emptyList()
+                },
+                latinEnabled = p.translateLatinFilterEnabled.get(),
+                latinMinLetters = p.translateLatinMinLetters.get().coerceIn(1, 10),
+                skipSameLanguage = p.translateSkipSameLanguage.get(),
             ),
         )
     }
