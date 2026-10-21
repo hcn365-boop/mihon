@@ -40,6 +40,7 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
     val translateAutoFromTitle: Preference<Boolean> = own(base.translateAutoFromTitle)
     val translateAutoFromSource: Preference<Boolean> = own(base.translateAutoFromSource)
     val translateConfirmLanguage: Preference<Boolean> = own(base.translateConfirmLanguage)
+    val translateCollisionPadding: Preference<Int> = own(base.translateCollisionPadding) // <--- أضيفت هنا
 
     // endregion
 
@@ -70,10 +71,10 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         translatePreloadCount, translateAutoLanguage, translateAutoFromTitle, translateAutoFromSource,
         translateConfirmLanguage, translationModel, translationApiKey, translationTemperature,
         translationMaxTokens, translationServerUrl, translatePagesPerRequest, translateMaxChars,
-        translateMaxWaitSeconds,
+        translateMaxWaitSeconds, translateCollisionPadding, // <--- أضيفت هنا أيضاً لكي تُحدث الـ Snapshot عند تغييرها
     )
 
-        /** Puts the settings of this scope back to their defaults. Keys, server addresses and model links are kept. */
+    /** Puts the settings of this scope back to their defaults. Keys, server addresses and model links are kept. */
     fun resetToDefaults() {
         fun <T> reset(pref: Preference<T>) = pref.set(pref.defaultValue())
         reset(colorizeEnabled)
