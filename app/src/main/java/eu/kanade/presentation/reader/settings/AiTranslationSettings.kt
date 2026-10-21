@@ -38,8 +38,7 @@ import eu.kanade.tachiyomi.ui.reader.colorize.AiPrefs
 
 /** Translation part of the AI tab. Texts are plain strings for now. */
 @Composable
-internal fun TranslationSection(prefs: AiPrefs) {
-    val context = LocalContext.current
+internal fun TranslationSection(prefs: AiPrefs, inReader: Boolean = false)    val context = LocalContext.current
     val enabled by prefs.translateEnabled.collectAsState()
     CheckboxItem(label = "Translate pages", pref = prefs.translateEnabled)
     if (!enabled) return
@@ -62,6 +61,26 @@ internal fun TranslationSection(prefs: AiPrefs) {
         pref = prefs.translateTo,
         options = TextTranslatorLanguage.entries.map { it.name to readable(it.name) },
     )
+        CheckboxItem(label = "Remove bubbles that contain certain words", pref = prefs.translateFilterWordsEnabled)
+    val filterWords by prefs.translateFilterWordsEnabled.collectAsState()
+    if (filterWords) {
+        TextSetting("Words, separated by commas", prefs.translateFilterWords)
+    }
+    CheckboxItem(label = "Remove Latin bubbles with few different letters", pref = prefs.translateLatinFilterEnabled)
+    val latinFilter by prefs.translateLatinFilterEnabled.collectAsState()
+    if (latinFilter) {
+        TSlider("Fewest different letters to keep a bubble", prefs.translateLatinMinLetters, 1..6) { "$it" }
+    }
+    CheckboxItem(label = "Do not translate when the page is already in the target language", pref = prefs.translateSkipSameLanguage)
+    val skipSame by prefs.translateSkipSameLanguage.collectAsState()
+    val mangaId = MangaTranslationContext.mangaId
+    if (skipSame && inReader && mangaId >= 0) {
+        val forcePref = remember(mangaId) { prefs.forceTranslate(mangaId) }
+        val forced by forcePref.collectAsState()
+        TextButton(onClick = { forcePref.set(!forced) }, modifier = Modifier.padding(horizontal = 8.dp)) {
+            Text(if (forced) "Stop translating this manga when the language is the same" else "Translate this manga anyway")
+        }
+    }
     ChoiceRow(
         label = "Translation engine",
         pref = prefs.translationEngine,
