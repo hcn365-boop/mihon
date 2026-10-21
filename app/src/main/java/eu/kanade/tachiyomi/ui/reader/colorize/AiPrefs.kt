@@ -41,7 +41,7 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
     val translateAutoFromSource: Preference<Boolean> = own(base.translateAutoFromSource)
     val translateConfirmLanguage: Preference<Boolean> = own(base.translateConfirmLanguage)
     val translateCollisionPadding: Preference<Int> = own(base.translateCollisionPadding)
-        val translateFilterWordsEnabled: Preference<Boolean> = own(base.translateFilterWordsEnabled)
+    val translateFilterWordsEnabled: Preference<Boolean> = own(base.translateFilterWordsEnabled)
     val translateFilterWords: Preference<String> = own(base.translateFilterWords)
     val translateLatinFilterEnabled: Preference<Boolean> = own(base.translateLatinFilterEnabled)
     val translateLatinMinLetters: Preference<Int> = own(base.translateLatinMinLetters)
@@ -78,7 +78,9 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         translatePreloadCount, translateAutoLanguage, translateAutoFromTitle, translateAutoFromSource,
         translateConfirmLanguage, translationModel, translationApiKey, translationTemperature,
         translationMaxTokens, translationServerUrl, translatePagesPerRequest, translateMaxChars,
-        translateMaxWaitSeconds, translateCollisionPadding, // <--- أضيفت هنا أيضاً لكي تُحدث الـ Snapshot عند تغييرها
+        translateMaxWaitSeconds, translateCollisionPadding, translateFilterWordsEnabled,
+        translateFilterWords, translateLatinFilterEnabled, translateLatinMinLetters,
+        translateSkipSameLanguage,
     )
 
     /** Puts the settings of this scope back to their defaults. Keys, server addresses and model links are kept. */
@@ -117,6 +119,11 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         reset(translateMaxChars)
         reset(translateMaxWaitSeconds)
         reset(translateCollisionPadding)
+        reset(translateFilterWordsEnabled)
+        reset(translateFilterWords)
+        reset(translateLatinFilterEnabled)
+        reset(translateLatinMinLetters)
+        reset(translateSkipSameLanguage)
     }
     
     /** Gives this manga a copy of the general settings, so its own settings start from what you have now. */
@@ -145,5 +152,10 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         copy(base.translateAutoFromSource)
         copy(base.translateConfirmLanguage)
         copy(base.translateCollisionPadding)
+        copy(base.translateFilterWordsEnabled)
+        copy(base.translateFilterWords)
+        copy(base.translateLatinFilterEnabled)
+        copy(base.translateLatinMinLetters)
+        copy(base.translateSkipSameLanguage)
     }
 }
