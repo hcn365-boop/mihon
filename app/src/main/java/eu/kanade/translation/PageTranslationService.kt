@@ -140,7 +140,11 @@ object PageTranslationService {
         loadBitmap: () -> Bitmap?,
     ): Prepared {
         val ocrName = "${imageHash}_${TranslationStore.key(settings.from.name, ocrMode.name)}"
-        val translationName = "${ocrName}_${TranslationStore.key(settings.to.name, settings.engine.name, settings.model)}"
+        val filter = AiConfig.translation?.filter
+        val skipSame = filter?.skipSameLanguage == true && !AiConfig.forceTranslate(MangaTranslationContext.mangaId)
+        // The page is already in the target language, and nobody asked for a translation.
+        if (skipSame && settings.from.name.equals(settings.to.name, ignoreCase = true)) return Prepared.Ready(null)
+        val translationName = "${ocrName}_${TranslationStore.key(settings.to.name, settings.engine.name, settings.model, filter?.signature.orEmpty())}"
 
         TranslationStore.load(context, Kind.TRANSLATED, translationName)?.let {
             return Prepared.Ready(it.takeIf { page -> page.blocks.isNotEmpty() })
@@ -171,16 +175,19 @@ object PageTranslationService {
             }
         }
 
-        if (ocrPage.blocks.isEmpty()) {
-            TranslationStore.save(context, Kind.TRANSLATED, translationName, ocrPage)
+        // Remove the bubbles the filters do not want. The stored OCR result itself is not changed.
+        val page = if (filter != null) PageFilter.apply(ocrPage, filter) else ocrPage
+        if (page.blocks.isEmpty()) {
+            TranslationStore.save(context, Kind.TRANSLATED, translationName, page)
             return Prepared.Ready(null)
         }
-        // Translate from the language the page was really read with.
         val usedName = TranslationStore.loadText(context, Kind.LANGUAGE, ocrName)
         val used = TextRecognizerLanguage.entries.firstOrNull { it.name == usedName } ?: settings.from
         val effective = if (used == settings.from) settings else settings.copy(from = used)
+        // The language check after OCR may have found that the page is already in the target language.
+        if (skipSame && effective.from.name.equals(effective.to.name, ignoreCase = true)) return Prepared.Ready(null)
         val entry = synchronized(pendingLock) {
-            pending.getOrPut(translationName) { Pending(context, translationName, ocrPage, effective) }
+            pending.getOrPut(translationName) { Pending(context, translationName, page, effective) }
         }
         return Prepared.Waiting(entry)
     }
