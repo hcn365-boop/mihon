@@ -81,12 +81,15 @@ object AutoLanguage {
         return null
     }
 
-    // Latin-script languages are read with the English OCR models.
-    private val LATIN_NAMES = setOf(
-        "spanish", "español", "espanol", "french", "français", "francais", "german", "deutsch",
-        "italian", "italiano", "portuguese", "português", "portugues", "dutch", "polish", "turkish",
-        "indonesian", "vietnamese", "romanian", "hungarian", "czech", "slovak", "croatian",
-        "slovenian", "danish", "swedish", "norwegian", "finnish",
+    private val NATIVE_NAMES = mapOf(
+        "español" to TextRecognizerLanguage.SPANISH,
+        "espanol" to TextRecognizerLanguage.SPANISH,
+        "français" to TextRecognizerLanguage.FRENCH,
+        "francais" to TextRecognizerLanguage.FRENCH,
+        "deutsch" to TextRecognizerLanguage.GERMAN,
+        "italiano" to TextRecognizerLanguage.ITALIAN,
+        "português" to TextRecognizerLanguage.PORTUGUESE,
+        "portugues" to TextRecognizerLanguage.PORTUGUESE,
     )
 
     private fun languageFromName(name: String): TextRecognizerLanguage? {
@@ -96,23 +99,15 @@ object AutoLanguage {
             word in setOf("chinese", "china", "cn", "zh", "mandarin", "manhua", "中文", "汉语") ->
                 TextRecognizerLanguage.CHINESE
             word in setOf("korean", "korea", "kr", "ko", "manhwa", "한국어") -> TextRecognizerLanguage.KOREAN
-            word in setOf("english", "eng", "en") || word in LATIN_NAMES -> TextRecognizerLanguage.ENGLISH
-            else -> null
+            word in setOf("english", "eng", "en") -> TextRecognizerLanguage.ENGLISH
+            else -> TextRecognizerLanguage.entries.firstOrNull { it.label.equals(word, ignoreCase = true) }
+                ?: NATIVE_NAMES[word]
         }
     }
 
-    /**
-     * Maps a language tag ("ja", "zh-hans", "fr"...) to the page languages the OCR has models for.
-     * Every Latin-script language is read with the English models. Used for the source language
-     * and for the tags that ML Kit language identification returns.
-     */
-    fun languageFromTag(tag: String): TextRecognizerLanguage? = when (tag.substringBefore("-").lowercase()) {
-        "zh" -> TextRecognizerLanguage.CHINESE
-        "ja" -> TextRecognizerLanguage.JAPANESE
-        "ko" -> TextRecognizerLanguage.KOREAN
-        "en", "fr", "de", "es", "it", "pt", "nl", "pl", "tr", "id",
-        "vi", "ro", "hu", "cs", "sk", "hr", "sl", "da", "sv", "no", "fi",
-        -> TextRecognizerLanguage.ENGLISH
-        else -> null
+    /** Maps a language tag ("ja", "zh-hans", "es"...) to a page language, using the translation codes. */
+    fun languageFromTag(tag: String): TextRecognizerLanguage? {
+        val prefix = tag.substringBefore("-").lowercase()
+        return TextRecognizerLanguage.entries.firstOrNull { it.code.equals(prefix, ignoreCase = true) }
     }
 }
