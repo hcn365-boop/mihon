@@ -33,11 +33,18 @@ class OcrSession(
         PaddleTextRecognizer(context, language)
     }
 
+    // Paddle may have no model for this language: ML Kit reads it then.
+    private val effectiveMode = when {
+        mode == OcrMode.MLKIT -> mode
+        PaddleSupport.supports(context, language) -> mode
+        else -> OcrMode.MLKIT
+    }
+
     val extractor = PageTextExtractor(
-        mode = mode,
-        isRtl = PageTextExtractor.isRtlLanguage(language.name),
-        mlKit = if (mode == OcrMode.PADDLE) null else this::runMlKit,
-        paddle = if (mode == OcrMode.MLKIT) null else this::runPaddle,
+        mode = effectiveMode,
+        isRtl = language == TextRecognizerLanguage.JAPANESE || language == TextRecognizerLanguage.KOREAN,
+        mlKit = if (effectiveMode == OcrMode.PADDLE) null else this::runMlKit,
+        paddle = if (effectiveMode == OcrMode.MLKIT) null else this::runPaddle,
     )
 
     // Both engines block the calling thread, so they run on the default dispatcher.
