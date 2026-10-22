@@ -36,11 +36,11 @@ class MlKitTextRecognizer(override val language: TextRecognizerLanguage) : TextR
     }
 
     private val recognizer = TextRecognition.getClient(
-        when (language) {
-            TextRecognizerLanguage.ENGLISH -> TextRecognizerOptions.DEFAULT_OPTIONS
-            TextRecognizerLanguage.CHINESE -> ChineseTextRecognizerOptions.Builder().build()
-            TextRecognizerLanguage.JAPANESE -> JapaneseTextRecognizerOptions.Builder().build()
-            TextRecognizerLanguage.KOREAN -> KoreanTextRecognizerOptions.Builder().build()
+        when (language.script) {
+            OcrScript.LATIN -> TextRecognizerOptions.DEFAULT_OPTIONS
+            OcrScript.CHINESE -> ChineseTextRecognizerOptions.Builder().build()
+            OcrScript.JAPANESE -> JapaneseTextRecognizerOptions.Builder().build()
+            OcrScript.KOREAN -> KoreanTextRecognizerOptions.Builder().build()
         },
     )
 
