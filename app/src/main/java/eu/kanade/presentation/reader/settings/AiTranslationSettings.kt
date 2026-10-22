@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
+import eu.kanade.translation.OcrLanguages
 import eu.kanade.translation.OcrMode
 import eu.kanade.translation.TranslationFont
 import eu.kanade.translation.TranslationStore
@@ -45,12 +47,16 @@ internal fun TranslationSection(prefs: AiPrefs, inReader: Boolean = false) {
     if (!enabled) return
 
     val readable = { name: String -> name.lowercase().replaceFirstChar { it.uppercase() } }
+    
+    val ocrModeName by prefs.translationOcrMode.collectAsState()
     ChoiceRow(
-        label = "Language of the page",
-        pref = prefs.translateFrom,
-        options = TextRecognizerLanguage.entries.map { it.name to readable(it.name) },
+        label = "Text recognition (OCR)",
+        pref = prefs.translationOcrMode,
+        options = OcrMode.entries.map { it.name to readable(it.name) },
     )
-        CheckboxItem(label = "Choose the page language automatically for each manga", pref = prefs.translateAutoLanguage)
+    LanguageChoiceRow("Language of the page", prefs.translateFrom, ocrModeName)
+
+    CheckboxItem(label = "Choose the page language automatically for each manga", pref = prefs.translateAutoLanguage)
     val autoLanguage by prefs.translateAutoLanguage.collectAsState()
     if (autoLanguage) {
         CheckboxItem(label = "Read it from the title tags, like (Japanese)", pref = prefs.translateAutoFromTitle)
@@ -90,17 +96,12 @@ internal fun TranslationSection(prefs: AiPrefs, inReader: Boolean = false) {
         options = TextTranslators.entries.map { it.name to it.label },
     )
     ChoiceRow(
-        label = "Text recognition (OCR)",
-        pref = prefs.translationOcrMode,
-        options = OcrMode.entries.map { it.name to readable(it.name) },
-    )
-    ChoiceRow(
         label = "Font",
         pref = prefs.translationFont,
         options = TranslationFont.entries.map { it.name to it.label },
     )
 
-        val engineName by prefs.translationEngine.collectAsState()
+    val engineName by prefs.translationEngine.collectAsState()
     val engine = TextTranslators.fromName(engineName)
     if (engine == TextTranslators.GEMINI || engine == TextTranslators.OPENROUTER) {
         TextSetting("Model name", prefs.translationModel)
@@ -130,6 +131,58 @@ internal fun TranslationSection(prefs: AiPrefs, inReader: Boolean = false) {
         modifier = Modifier.padding(horizontal = 8.dp),
     ) {
         Text("Delete saved translations (${size / 1024} KB)")
+    }
+}
+
+/** Page language list for the chosen OCR engine: the main languages first, then the others. */
+@Composable
+private fun LanguageChoiceRow(label: String, pref: Preference<String>, ocrModeName: String) {
+    val context = LocalContext.current
+    val current by pref.collectAsState()
+    val mode = OcrMode.entries.firstOrNull { it.name.equals(ocrModeName, ignoreCase = true) } ?: OcrMode.MLKIT
+    val languages = remember(mode) { OcrLanguages.available(context, mode) }
+    val selected = TextRecognizerLanguage.entries.firstOrNull { it.name.equals(current, ignoreCase = true) }
+    var open by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Box {
+            TextButton(onClick = { open = true }) { Text(selected?.label ?: current) }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                val main = languages.filter { it.primary }
+                val others = languages.filter { !it.primary }
+                main.forEach { language ->
+                    DropdownMenuItem(
+                        text = { Text(language.label) },
+                        onClick = {
+                            pref.set(language.name)
+                            open = false
+                        },
+                    )
+                }
+                if (others.isNotEmpty()) HorizontalDivider()
+                others.forEach { language ->
+                    DropdownMenuItem(
+                        text = { Text(language.label) },
+                        onClick = {
+                            pref.set(language.name)
+                            open = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+    if (selected != null && selected !in languages) {
+        Text(
+            text = "This OCR engine cannot read ${selected.label}; ML Kit reads it instead.",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+        )
     }
 }
 
