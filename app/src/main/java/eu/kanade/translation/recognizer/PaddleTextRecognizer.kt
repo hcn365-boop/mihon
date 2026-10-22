@@ -70,12 +70,9 @@ class PaddleTextRecognizer(
             detSession = ortEnvironment?.createSession(detModel, detOptions)
             Log.d(TAG, "Detection model loaded successfully.")
 
-            val (recModelPath, dictPath) = when (language) {
-                TextRecognizerLanguage.CHINESE -> Pair("paddleocr/rec_ch_model.onnx", "paddleocr/en_dict.txt")
-                TextRecognizerLanguage.JAPANESE -> Pair("paddleocr/rec_jp_model.onnx", "paddleocr/en_dict.txt")
-                TextRecognizerLanguage.KOREAN -> Pair("paddleocr/rec_kr_model.onnx", "paddleocr/en_dict.txt")
-                else -> Pair("paddleocr/rec_en_model.onnx", "paddleocr/en_dict.txt")
-            }
+            val own = PaddleSupport.ownFiles(context, language)
+            val recModelPath = own?.first ?: "paddleocr/rec_en_model.onnx"
+            val dictPath = own?.second ?: "paddleocr/en_dict.txt"
 
             Log.d(TAG, "Loading recognition model from $recModelPath...")
             val recModel = context.assets.open(recModelPath).readBytes()
@@ -213,7 +210,7 @@ class PaddleTextRecognizer(
             val inputName = detSession?.inputNames?.first() ?: "x"
             result = detSession?.run(mapOf(inputName to tensor))
 
-            // القراءة الآمنة للـ Tensor (التعديل هنا لتجنب خطأ orElse)
+            // القراءة الآمنة للـ Tensor
             val outputValue = result?.get(0) ?: return emptyList()
             val outputTensor = outputValue as? OnnxTensor ?: return emptyList()
             
