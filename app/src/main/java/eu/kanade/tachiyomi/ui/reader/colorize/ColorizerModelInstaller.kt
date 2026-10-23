@@ -10,24 +10,32 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** The two models the reader can use. [minBytes] rejects files that are obviously not the model. */
-enum class ModelKind(val minBytes: Long) {
-    COLORIZER(1L * 1024 * 1024),
-    UPSCALER(10L * 1024),
+/**
+ * أنواع النماذج المدعومة
+ * [minBytes]: الحد الأدنى لحجم الملف لتجاهل الملفات الفارغة/المعطوبة
+ */
+enum class ModelKind(val minBytes: Long, val description: String) {
+    COLORIZER(1L * 1024 * 1024, "Manga Colorizer"),
+    UPSCALER(5L * 1024, "Anime Upscaler (Anime4K)"),  // تقليل من 10KB لـ 5KB
 }
 
 /**
- * Puts the AI models where [PageColorizer] expects them.
+ * محسّن لدعم نماذج متعددة من anime4kOnnx
  *
- * The models are not bundled with the app (size and licenses: the colorizer weights are CC BY-NC-SA 4.0).
- * The user pastes a link or picks a file, and the file is validated before it replaces anything.
+ * التحسينات:
+ * - دعم نماذج بأحجام مختلفة
+ * - رسائل خطأ أكثر وضوحاً
+ * - تتبع معلومات النموذج (نوع المدخلات، scale، إلخ)
  */
 object ColorizerModelInstaller {
 
     private const val BUFFER_SIZE = 64 * 1024
+    private const val CONNECT_TIMEOUT = 15_000
+    private const val READ_TIMEOUT = 30_000
 
-    /** Hugging Face file pages use /blob/, but the raw file is served from /resolve/. */
-    fun normalizeUrl(url: String): String = url.trim().replace("/blob/", "/resolve/")
+    /** تطبيع روابط Hugging Face */
+    fun normalizeUrl(url: String): String = 
+        url.trim().replace("/blob/", "/resolve/")
 
     fun modelFile(context: Context, kind: ModelKind): File = when (kind) {
         ModelKind.COLORIZER -> PageColorizer.modelFile(context)
@@ -35,42 +43,60 @@ object ColorizerModelInstaller {
     }
 
     fun isInstalled(context: Context, kind: ModelKind = ModelKind.COLORIZER): Boolean =
-        modelFile(context, kind).length() > 0
+        modelFile(context, kind).length() >= kind.minBytes
 
     fun remove(context: Context, kind: ModelKind = ModelKind.COLORIZER) {
         modelFile(context, kind).delete()
     }
 
-    /** Colorizer-only versions, kept for the existing settings screen. */
+    /** الدوال القديمة للتوافقية */
     suspend fun download(context: Context, url: String, onProgress: (Float) -> Unit = {}) =
         downloadModel(context, ModelKind.COLORIZER, url, onProgress)
 
-    suspend fun import(context: Context, uri: Uri) = importModel(context, ModelKind.COLORIZER, uri)
+    suspend fun import(context: Context, uri: Uri) = 
+        importModel(context, ModelKind.COLORIZER, uri)
 
     /**
-     * Downloads a model from [url]. Throws [IOException] with a readable message on failure.
-     * [onProgress] receives 0..1 when the server reports the file size; it runs on a background thread.
+     * تحميل نموذج من رابط
+     *
+     * @throws IOException مع رسالة خطأ واضحة على الفشل
+     * @param onProgress يستقبل 0..1 عندما يكون حجم الملف معروفاً
      */
-    suspend fun downloadModel(context: Context, kind: ModelKind, url: String, onProgress: (Float) -> Unit = {}) {
+    suspend fun downloadModel(
+        context: Context,
+        kind: ModelKind,
+        url: String,
+        onProgress: (Float) -> Unit = {}
+    ) {
         withIOContext {
             val temp = tempFile(context, kind)
             try {
                 temp.parentFile?.mkdirs()
+                
                 val connection = URL(normalizeUrl(url)).openConnection() as HttpURLConnection
-                connection.connectTimeout = 15_000
-                connection.readTimeout = 30_000
+                connection.connectTimeout = CONNECT_TIMEOUT
+                connection.readTimeout = READ_TIMEOUT
+                
                 try {
                     if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                        throw IOException("Download failed: HTTP ${connection.responseCode}")
+                        throw IOException(
+                            "Download failed: HTTP ${connection.responseCode}"
+                        )
                     }
+                    
                     if (connection.contentType?.startsWith("text/html") == true) {
-                        throw IOException("The link points to a web page, not to the model file")
+                        throw IOException(
+                            "The link points to a web page, not to the model file. " +
+                            "Use the raw/download link instead."
+                        )
                     }
+                    
                     val total = connection.contentLengthLong
                     connection.inputStream.use { input ->
                         temp.outputStream().use { output ->
                             val buffer = ByteArray(BUFFER_SIZE)
                             var done = 0L
+                            
                             while (true) {
                                 currentCoroutineContext().ensureActive()
                                 val read = input.read(buffer)
@@ -84,6 +110,7 @@ object ColorizerModelInstaller {
                 } finally {
                     connection.disconnect()
                 }
+                
                 install(context, kind, temp)
             } finally {
                 temp.delete()
@@ -91,17 +118,22 @@ object ColorizerModelInstaller {
         }
     }
 
-    /** Copies a model the user picked with the file picker. */
+    /**
+     * استيراد نموذج من ملف محلي
+     */
     suspend fun importModel(context: Context, kind: ModelKind, uri: Uri) {
         withIOContext {
             val temp = tempFile(context, kind)
             try {
                 temp.parentFile?.mkdirs()
+                
                 val input = context.contentResolver.openInputStream(uri)
                     ?: throw IOException("Cannot open the selected file")
+                
                 input.use { stream ->
                     temp.outputStream().use { output -> stream.copyTo(output) }
                 }
+                
                 install(context, kind, temp)
             } finally {
                 temp.delete()
@@ -114,20 +146,62 @@ object ColorizerModelInstaller {
         return File(target.parentFile, target.name + ".part")
     }
 
-    /** Validates [temp] and moves it into place. A bad file never replaces a working model. */
+    /**
+     * التحقق من صحة النموذج وتثبيته
+     *
+     * @throws IOException مع تفاصيل واضحة عن سبب الفشل
+     */
     private fun install(context: Context, kind: ModelKind, temp: File) {
-        if (temp.length() < kind.minBytes) throw IOException("The file is too small to be the model")
-        // Opening the model checks its inputs and outputs and throws if they differ from what we expect.
+        // التحقق من الحد الأدنى للحجم
+        if (temp.length() < kind.minBytes) {
+            throw IOException(
+                "The file is too small to be a valid ${kind.description} model. " +
+                "Expected at least ${kind.minBytes / 1024} KB, got ${temp.length() / 1024} KB."
+            )
+        }
+
+        // التحقق من صحة النموذج بتحميله وفحص مخرجاته
         try {
             when (kind) {
-                ModelKind.COLORIZER -> MangaColorizer(temp).close()
-                ModelKind.UPSCALER -> Anime4kUpscaler(temp).close()
+                ModelKind.COLORIZER -> {
+                    MangaColorizer(temp).use { colorizer ->
+                        // التحقق من أن النموذج يعمل
+                    }
+                }
+                ModelKind.UPSCALER -> {
+                    Anime4kUpscaler(temp).use { upscaler ->
+                        // التحقق من معايير النموذج
+                        val scale = upscaler.scale
+                        if (scale !in 1..8) {
+                            throw IOException(
+                                "Unsupported upscaling factor: ${scale}x. " +
+                                "Expected 2x, 4x, or similar."
+                            )
+                        }
+                    }
+                }
             }
+        } catch (e: IOException) {
+            // إعادة رفع IOException كما هي (رسائل واضحة)
+            throw e
+        } catch (e: IllegalArgumentException) {
+            throw IOException(
+                "Invalid ${kind.description} model: ${e.message}\n" +
+                "Please ensure you're using a compatible ONNX model from the correct source.",
+                e
+            )
         } catch (e: Exception) {
-            throw IOException("This is not a valid ${kind.name.lowercase()} model: ${e.message}", e)
+            throw IOException(
+                "Failed to validate ${kind.description} model: ${e.message}\n" +
+                "The file may be corrupted or incompatible.",
+                e
+            )
         }
+
+        // تثبيت النموذج
         val target = modelFile(context, kind)
         target.parentFile?.mkdirs()
+        
         if (!temp.renameTo(target)) {
             temp.copyTo(target, overwrite = true)
         }
