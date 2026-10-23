@@ -422,13 +422,14 @@ object PageColorizer {
     }
 
     private fun upscalerEngine(model: File): Anime4kUpscaler {
-        val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
-        val setup = "$acceleration/${AiConfig.aiThreads}"
-        val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
-        return upscalerManager.getOrPut(key) {
-            Anime4kUpscaler(model, acceleration, AiConfig.aiThreads)
-        }
+    val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
+    val setup = "$acceleration/${AiConfig.aiThreads}"
+    val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
+    return upscalerManager.getOrPut(key) {
+        Anime4kUpscaler(model, acceleration, AiConfig.aiThreads)
     }
+}
+
 
     // endregion
 
