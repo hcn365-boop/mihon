@@ -24,7 +24,8 @@ import kotlin.math.min
 import kotlin.collections.ArrayDeque
 import tachiyomi.core.common.util.system.logcat
 import logcat.LogPriority
-import eu.kanade.translation.OcrLanguages
+import eu.kanade.translation.PaddleSupport
+
 
 
 data class PaddleTextBlock(
