@@ -2,8 +2,10 @@ package eu.kanade.tachiyomi.ui.reader.colorize
 
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import ai.onnxruntime.OrtSession.SessionOptions
+import ai.onnxruntime.GraphOptimizationLevel
 import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.TensorInfo
+import ai.onnxruntime.OrtLoggingLevel
 import android.graphics.Bitmap
 import java.nio.FloatBuffer
 import kotlin.math.max
