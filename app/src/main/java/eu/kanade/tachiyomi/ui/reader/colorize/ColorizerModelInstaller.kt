@@ -169,7 +169,12 @@ object ColorizerModelInstaller {
                     }
                 }
                 ModelKind.UPSCALER -> {
-                    Anime4kUpscaler(temp).use { upscaler ->
+                    // ✅ استخدام Constructor جديد بـ 3 arguments
+                    Anime4kUpscaler(
+                        modelPath = temp,
+                        acceleration = Acceleration.CPU,
+                        aiThreads = 1
+                    ).use { upscaler ->
                         // التحقق من معايير النموذج
                         val scale = upscaler.scale
                         if (scale !in 1..8) {
