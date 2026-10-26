@@ -124,7 +124,9 @@ class MangaColorizer(
     private fun runModel(image: FloatArray): FloatArray {
         val tensors = ArrayList<OnnxTensor>()
         // داخل runModel عند تجهيز التنسورات (Tensors) للمدخلات:
-android.util.Log.d("SamDebug", "Running model with SAM guide: ${guide != null}")
+catch (e: Throwable) {
+    logcat(LogPriority.ERROR, e) { "SAM encoder: failed to process or load features" }
+}
 
         try {
             fun tensor(data: FloatArray, vararg shape: Long): OnnxTensor =
