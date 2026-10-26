@@ -107,6 +107,10 @@ object PageColorizer {
 
     fun upscalerModelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), UPSCALER_FILE)
 
+    fun samModelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), "v6_sam_encoder.onnx")
+
+    private fun samActive(context: Context): Boolean = AiConfig.colorizeUseSam && samModelFile(context).length() > 0
+
     fun isModelInstalled(context: Context): Boolean = modelFile(context).length() > 0
 
     fun isUpscalerInstalled(context: Context): Boolean = upscalerModelFile(context).length() > 0
@@ -190,7 +194,7 @@ object PageColorizer {
 
         val imageHash = hash(bytes)
         val shrinkSide = if (doShrink) normalize else 0
-        val baseName = baseName(imageHash, if (doColor) intensity else -1f, doUpscale, shrinkSide, colorModel, upscaleModel)
+        val baseName = baseName(imageHash, if (doColor) intensity else -1f, doUpscale, shrinkSide, colorModel, upscaleModel, samActive(context))
         val effective = translationConfig?.effectiveSettings()
         val finalName = translationConfig?.let { config ->
             val s = effective!!
@@ -265,9 +269,9 @@ object PageColorizer {
                     if (color) {
                         val colorModel = modelFile(context)
                         val chromaFile = chromaFile(context, imageHash, colorModel)
-                        val engine = colorizerEngine(colorModel)
+                        val engine = colorizerEngine(context, colorModel)
                         val chroma = loadChroma(chromaFile) ?: engine.predict(working).also {
-                            runCatching { saveChroma(chromaFile, it) }
+                            runCatching { saveChroma(context, chromaFile, it) }
                         }
                         page = engine.render(working, chroma, intensity)
                     }
@@ -379,7 +383,7 @@ object PageColorizer {
         try {
             if (!looksGrayscale(original)) return
             mutex.withLock {
-                if (!chromaFile.isFile) saveChroma(chromaFile, colorizerEngine(model).predict(original))
+                if (!chromaFile.isFile) saveChroma(context, chromaFile, colorizerEngine(context, model).predict(original))
             }
         } finally {
             original.recycle()
@@ -412,12 +416,14 @@ object PageColorizer {
     @Volatile
     private var acceleratorFailed = false
 
-    private fun colorizerEngine(model: File): MangaColorizer {
+    private fun colorizerEngine(context: Context, model: File): MangaColorizer {
         val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.colorizeAcceleration
-        val setup = "$acceleration/${AiConfig.aiThreads}"
+        val sam = samActive(context)
+        val setup = "$acceleration/${AiConfig.aiThreads}/sam=$sam"
         val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
         return colorizerManager.getOrPut(key) {
-            MangaColorizer(model, acceleration, AiConfig.aiThreads)
+            val guide = if (sam) SamFeatureProvider.load(samModelFile(context), Acceleration.CPU, AiConfig.aiThreads) else null
+            MangaColorizer(model, acceleration, AiConfig.aiThreads, guide)
         }
     }
 
@@ -464,11 +470,12 @@ object PageColorizer {
         shrinkSide: Int,
         colorModel: File,
         upscaleModel: File,
+        sam: Boolean,
     ): String {
         val color = if (intensity < 0f) "n" else (intensity * 100).roundToInt().toString()
         // upscaleMaxOutputPixels في اسم الملف حتى لا تُقرأ صور ضخمة قديمة من الكاش بعد تغيير السقف
         val upscaleStamp = if (upscale) "${upscaleModel.length()}_${AiConfig.upscaleMaxOutputPixels / 1_000_000}" else "n"
-        return "${imageHash}_c${color}_${colorModel.length()}_u${upscaleStamp}_s$shrinkSide"
+        return "${imageHash}_c${color}${if (sam) "s" else ""}_${colorModel.length()}_u${upscaleStamp}_s$shrinkSide"
     }
 
     private fun cacheFile(context: Context, name: String): File = File(File(context.cacheDir, PAGE_CACHE_DIR), name)
@@ -494,7 +501,7 @@ object PageColorizer {
     // region Chroma cache (a and b stored as signed bytes, about 0.5 MB per page)
 
     private fun chromaFile(context: Context, imageHash: String, model: File): File =
-        File(File(context.cacheDir, CHROMA_CACHE_DIR), imageHash + "_" + model.length())
+        File(File(context.cacheDir, CHROMA_CACHE_DIR), imageHash + "_" + model.length() + (if (samActive(context)) "_sam" else ""))
 
     private fun loadChroma(file: File): MangaColorizer.Chroma? {
         if (!file.isFile) return null
@@ -507,7 +514,7 @@ object PageColorizer {
         )
     }
 
-    private fun saveChroma(file: File, chroma: MangaColorizer.Chroma) {
+    private fun saveChroma(context: Context, file: File, chroma: MangaColorizer.Chroma) {
         val dir = file.parentFile ?: return
         dir.mkdirs()
         val data = ByteArray(CHROMA_SIZE * 2)
