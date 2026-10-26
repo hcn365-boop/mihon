@@ -181,39 +181,41 @@ internal object TextBlockMerger {
         if (filteredBlocks.isEmpty()) return mutableListOf()
 
         val isWebtoon = imgHeight > 2300f || imgHeight > (imgWidth * 2f)
-        
-        // استخدام نظام العناقيد (Clustering) الآمن والسريع بدل إعادة ضبط المؤشر لمنع التعليق
-        val clusters = mutableListOf<MutableList<TranslationBlock>>()
-        val unmerged = filteredBlocks.toMutableList()
 
         val xThreshold = (2.5f * (imgWidth / 1200f).coerceAtMost(3.5f)).coerceAtLeast(1.0f)
         val yThresholdFactor = (1.6f * (imgHeight / 2000f).coerceAtMost(2.6f)).coerceAtLeast(1.0f)
 
-        while (unmerged.isNotEmpty()) {
-            val cluster = mutableListOf(unmerged.removeAt(0))
-            var grew: Boolean
-            do {
-                grew = false
-                val iterator = unmerged.iterator()
-                while (iterator.hasNext()) {
-                    val next = iterator.next()
-                    // إذا كان البلوك الحالي يناسب أي بلوك داخل العنقود بناءً على الشروط الدقيقة
-                    if (cluster.any { shouldMergeTextBlock(it, next, xThreshold, yThresholdFactor) }) {
-                        cluster.add(next)
-                        iterator.remove()
-                        grew = true
+        // ═══════════════════════════════════════════════════════════════════
+        // نظام الدمج التكراري الآمن (Iterative Merge Pass)
+        // يضمن دمج أي أجزاء أو سطور متلامسة لنفس الفقاعة تماماً حتى الاستقرار
+        // ═══════════════════════════════════════════════════════════════════
+        var currentBlocks = filteredBlocks.toMutableList()
+        var mergedAny: Boolean
+        
+        do {
+            mergedAny = false
+            val nextPassBlocks = mutableListOf<TranslationBlock>()
+            val visited = BooleanArray(currentBlocks.size) { false }
+
+            for (i in currentBlocks.indices) {
+                if (visited[i]) continue
+                var currentMerged = currentBlocks[i]
+
+                for (j in i + 1 until currentBlocks.size) {
+                    if (visited[j]) continue
+                    
+                    if (shouldMergeTextBlock(currentMerged, currentBlocks[j], xThreshold, yThresholdFactor)) {
+                        currentMerged = mergeTextBlock(currentMerged, currentBlocks[j], isWebtoon)
+                        visited[j] = true
+                        mergedAny = true
                     }
                 }
-            } while (grew)
-            clusters.add(cluster)
-        }
-
-        // دمج عناصر كل عنقود معاً بسلام ودون استنزاف للمعالج
-        val mergedBlocks = clusters.map { cluster ->
-            cluster.drop(1).fold(cluster.first()) { merged, next ->
-                mergeTextBlock(merged, next, isWebtoon)
+                nextPassBlocks.add(currentMerged)
             }
-        }.toMutableList()
+            currentBlocks = nextPassBlocks
+        } while (mergedAny && currentBlocks.size > 1)
+
+        val mergedBlocks = currentBlocks
 
         // ═══════════════════════════════════════════════════════════════
         // التوسيع (Expansion) — باستخدام معامل التكبير القادم من الإعدادات
