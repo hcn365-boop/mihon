@@ -124,6 +124,9 @@ class MangaColorizer(
     private fun runModel(image: FloatArray): FloatArray {
         val tensors = ArrayList<OnnxTensor>()
         // داخل runModel عند تجهيز التنسورات (Tensors) للمدخلات:
+        // إذا حدث خطأ في أبعاد نموذج SAM أو لمطابقة الشكل المطلوب:
+logcat(LogPriority.ERROR) { "SAM encoder: unexpected shapes or failed to read outputs (e.g., got shapes like $outputShapes)" }
+
 catch (e: Throwable) {
     logcat(LogPriority.ERROR, e) { "SAM encoder: failed to process or load features" }
 }
