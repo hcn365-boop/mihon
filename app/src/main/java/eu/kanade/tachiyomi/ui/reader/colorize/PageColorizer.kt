@@ -270,7 +270,15 @@ object PageColorizer {
                         val colorModel = modelFile(context)
                         val chromaFile = chromaFile(context, imageHash, colorModel)
                         val engine = colorizerEngine(context, colorModel)
-                        val chroma = loadChroma(chromaFile) ?: engine.predict(working).also {
+                        
+                        // استخراج ميزات الـ SAM ديناميكياً لكل صفحة حقيقية أثناء المعالجة للتجربة
+                        val pageGuide = if (samActive(context)) {
+                            SamFeatureProvider.extract(samModelFile(context), working, Acceleration.CPU, AiConfig.aiThreads)
+                        } else {
+                            null
+                        }
+
+                        val chroma = loadChroma(chromaFile) ?: engine.predict(working, pageGuide).also {
                             runCatching { saveChroma(context, chromaFile, it) }
                         }
                         page = engine.render(working, chroma, intensity)
@@ -383,7 +391,15 @@ object PageColorizer {
         try {
             if (!looksGrayscale(original)) return
             mutex.withLock {
-                if (!chromaFile.isFile) saveChroma(context, chromaFile, colorizerEngine(context, model).predict(original))
+                if (!chromaFile.isFile) {
+                    val engine = colorizerEngine(context, model)
+                    val pageGuide = if (samActive(context)) {
+                        SamFeatureProvider.extract(samModelFile(context), original, Acceleration.CPU, AiConfig.aiThreads)
+                    } else {
+                        null
+                    }
+                    saveChroma(context, chromaFile, engine.predict(original, pageGuide))
+                }
             }
         } finally {
             original.recycle()
@@ -422,19 +438,8 @@ object PageColorizer {
         val setup = "$acceleration/${AiConfig.aiThreads}/sam=$sam"
         val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
         return colorizerManager.getOrPut(key) {
-            val guide = if (sam) {
-    try {
-        SamFeatureProvider.load(samModelFile(context), Acceleration.CPU, AiConfig.aiThreads)
-    } catch (e: Throwable) {
-        // تسجيل الخطأ بالصيغة المطلوبة
-        logcat(LogPriority.ERROR, e) { "SAM encoder: failed to load model file" }
-        null
-    }
-} else {
-    null
-}
-
-            MangaColorizer(model, acceleration, AiConfig.aiThreads, guide)
+            // لم يعد بحاجة لتحميل guide ثابت، سيتم استخراجه ديناميكياً لكل صفحة
+            MangaColorizer(model, acceleration, AiConfig.aiThreads, null)
         }
     }
 
