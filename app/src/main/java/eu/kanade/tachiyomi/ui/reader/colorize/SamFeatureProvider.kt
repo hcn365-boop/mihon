@@ -19,14 +19,15 @@ class SamFeatures(val level0: FloatArray, val level1: FloatArray)
  * result to the generator as its guide. A blank image always gives the same result, so it is computed
  * once, saved in a small file, and the big encoder model is closed again: pages never run it.
  *
- * Only the shapes the generator expects are used: [1, 256, 32, 32] and [1, 256, 16, 16]. If the encoder
+ * Only the shapes the generator expects are used: [1, 256, 64, 64] and [1, 256, 32, 32]. If the encoder
  * has other outputs or inputs, the shapes it has are logged and null is returned, so the colorizer
  * keeps using zero guides.
  */
 object SamFeatureProvider {
 
-    private const val LEVEL0_SIZE = 256 * 32 * 32
-    private const val LEVEL1_SIZE = 256 * 16 * 16
+    // تم تحديث الأحجام بناءً على مخرجات النموذج الفعليّة (64x64 و 32x32)
+    private const val LEVEL0_SIZE = 256 * 64 * 64
+    private const val LEVEL1_SIZE = 256 * 32 * 32
 
     /** Used for an input size the model leaves open (dynamic). */
     private const val DEFAULT_SIDE = 512L
@@ -72,12 +73,13 @@ object SamFeatureProvider {
                         val tensor = result[i] as? OnnxTensor ?: continue
                         val s = tensor.info.shape
                         seen.add(s.joinToString("x"))
-                        if (s.size == 4 && s[1] == 256L && s[2] == 32L && s[3] == 32L) level0 = read(tensor, LEVEL0_SIZE)
-                        if (s.size == 4 && s[1] == 256L && s[2] == 16L && s[3] == 16L) level1 = read(tensor, LEVEL1_SIZE)
+                        // البحث عن الأبعاد الجديدة المطابقة لمخرجات النموذج (64x64 و 32x32)
+                        if (s.size == 4 && s[1] == 256L && s[2] == 64L && s[3] == 64L) level0 = read(tensor, LEVEL0_SIZE)
+                        if (s.size == 4 && s[1] == 256L && s[2] == 32L && s[3] == 32L) level1 = read(tensor, LEVEL1_SIZE)
                     }
                     if (level0 == null || level1 == null) {
                         logcat(LogPriority.ERROR) {
-                            "SAM encoder: input ${shape.joinToString("x")}, outputs ${seen.joinToString()} (need 1x256x32x32 and 1x256x16x16)"
+                            "SAM encoder: input ${shape.joinToString("x")}, outputs ${seen.joinToString()} (need 1x256x64x64 and 1x256x32x32)"
                         }
                         return null
                     }
