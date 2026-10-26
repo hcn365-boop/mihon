@@ -123,6 +123,9 @@ class MangaColorizer(
     /** Returns the model output as 3 consecutive 512x512 planes (R, G, B), values in [-1, 1]. */
     private fun runModel(image: FloatArray): FloatArray {
         val tensors = ArrayList<OnnxTensor>()
+        // داخل runModel عند تجهيز التنسورات (Tensors) للمدخلات:
+android.util.Log.d("SamDebug", "Running model with SAM guide: ${guide != null}")
+
         try {
             fun tensor(data: FloatArray, vararg shape: Long): OnnxTensor =
                 OnnxTensor.createTensor(env, FloatBuffer.wrap(data), shape).also { tensors.add(it) }
