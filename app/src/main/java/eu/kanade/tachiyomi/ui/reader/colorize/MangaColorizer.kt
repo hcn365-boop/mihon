@@ -15,6 +15,7 @@ import org.opencv.imgproc.Imgproc
 import java.io.Closeable
 import java.io.File
 import java.nio.FloatBuffer
+import logcat.LogPriority
 
 /**
  * Runs the Manga Light V6 generator (v6_generator.onnx) on a page.
