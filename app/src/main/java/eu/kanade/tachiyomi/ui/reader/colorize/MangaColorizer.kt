@@ -131,8 +131,9 @@ class MangaColorizer(
 
             val inputs = mapOf(
                 INPUT_IMAGE to tensor(image, 1, 1, SIDE.toLong(), SIDE.toLong()),
-                INPUT_SAM0 to tensor(guide?.level0 ?: FloatArray(256 * 32 * 32), 1, 256, 32, 32),
-                INPUT_SAM1 to tensor(guide?.level1 ?: FloatArray(256 * 16 * 16), 1, 256, 16, 16),
+                // تم تعديل الأبعاد هنا لتتوافق مع مخرجات النموذج الجديد (64x64 و 32x32)
+                INPUT_SAM0 to tensor(guide?.level0 ?: FloatArray(256 * 64 * 64), 1, 256, 64, 64),
+                INPUT_SAM1 to tensor(guide?.level1 ?: FloatArray(256 * 32 * 32), 1, 256, 32, 32),
                 INPUT_WD14 to tensor(FloatArray(1024), 1, 1024),
             )
             session.run(inputs).use { result ->
