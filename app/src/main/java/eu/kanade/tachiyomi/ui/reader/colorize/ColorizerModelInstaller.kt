@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.reader.colorize
 
 import android.content.Context
 import android.net.Uri
+import ai.onnxruntime.OrtEnvironment
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import tachiyomi.core.common.util.lang.withIOContext
@@ -14,6 +15,7 @@ import java.net.URL
 enum class ModelKind(val minBytes: Long) {
     COLORIZER(1L * 1024 * 1024),
     UPSCALER(10L * 1024),
+    COLORIZER_SAM(1L * 1024 * 1024),
 }
 
 /**
@@ -32,6 +34,7 @@ object ColorizerModelInstaller {
     fun modelFile(context: Context, kind: ModelKind): File = when (kind) {
         ModelKind.COLORIZER -> PageColorizer.modelFile(context)
         ModelKind.UPSCALER -> PageColorizer.upscalerModelFile(context)
+        ModelKind.COLORIZER_SAM -> PageColorizer.samModelFile(context)
     }
 
     fun isInstalled(context: Context, kind: ModelKind = ModelKind.COLORIZER): Boolean =
@@ -122,6 +125,7 @@ object ColorizerModelInstaller {
             when (kind) {
                 ModelKind.COLORIZER -> MangaColorizer(temp).close()
                 ModelKind.UPSCALER -> Anime4kUpscaler(temp).close()
+                ModelKind.COLORIZER_SAM -> OrtSessions.create(OrtEnvironment.getEnvironment(), temp.absolutePath, Acceleration.CPU, 0).close()
             }
         } catch (e: Exception) {
             throw IOException("This is not a valid ${kind.name.lowercase()} model: ${e.message}", e)
