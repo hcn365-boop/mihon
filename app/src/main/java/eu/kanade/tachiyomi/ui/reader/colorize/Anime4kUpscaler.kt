@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.reader.colorize
 
+import ai.onnxruntime.OnnxJavaType
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
@@ -14,17 +15,14 @@ import org.opencv.core.Rect
 import org.opencv.imgproc.Imgproc
 import java.io.Closeable
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import org.opencv.core.Size
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/**
- * Universal Anime4K & Restoration upscaler: supports both 1-channel (ACNet) and 
- * 3-channel (Restore / Upscale_Denoise) ONNX models dynamically.
- * The page is processed in overlapping tiles, keeping memory usage minimal.
- */
 class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration.CPU, threads: Int = 0) : Closeable {
 
     private class Spec(
@@ -33,6 +31,7 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
         val tileHeight: Int,
         val scale: Int,
         val channels: Int,
+        val inputType: OnnxJavaType,
     )
 
     private class TileResult(val shape: LongArray, val values: FloatArray)
@@ -74,7 +73,6 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
         }
 
         if (spec.channels == 3) {
-            // معالجة نماذج الـ 3 قنوات (مثل Restore_L و Upscale_Denoise_L)
             val rgbFloat = m.mat()
             rgb.convertTo(rgbFloat, CvType.CV_32F, 1.0 / 255.0)
             val rgbUp = upscaleRgb(rgbFloat, m)
@@ -87,7 +85,6 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
             Utils.matToBitmap(out, bitmap)
             bitmap
         } else {
-            // المعالجة التقليدية لقناة واحدة (ACNet) عبر Luma
             val ycrcb = m.mat()
             Imgproc.cvtColor(rgb, ycrcb, Imgproc.COLOR_RGB2YCrCb)
             val luma = m.mat()
@@ -154,7 +151,7 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
                     val data = FloatArray(tileHeight * tileWidth)
                     tile.get(0, 0, data)
 
-                    val result = runTile(session, spec.inputName, data, tileHeight, tileWidth, 1)
+                    val result = runTile(session, spec.inputName, data, tileHeight, tileWidth, 1, spec.inputType)
                     val predicted = t.mat(tileHeight * scale, tileWidth * scale, CvType.CV_32F)
                     predicted.put(0, 0, result.values)
 
@@ -234,7 +231,7 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
                     System.arraycopy(gData, 0, data, planeSize, planeSize)
                     System.arraycopy(bData, 0, data, 2 * planeSize, planeSize)
 
-                    val result = runTile(session, spec.inputName, data, tileHeight, tileWidth, 3)
+                    val result = runTile(session, spec.inputName, data, tileHeight, tileWidth, 3, spec.inputType)
 
                     val outPlaneSize = (tileHeight * scale) * (tileWidth * scale)
                     val resR = FloatArray(outPlaneSize)
@@ -274,8 +271,9 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
             "Expected a model with one image input and one image output"
         }
         val name = session.inputNames.first()
-        val shape = (session.inputInfo.getValue(name).info as? TensorInfo)?.shape
+        val tensorInfo = session.inputInfo.getValue(name).info as? TensorInfo
             ?: error("The model input is not a tensor")
+        val shape = tensorInfo.shape
         check(shape.size == 4 && (shape[1] == 1L || shape[1] == 3L)) {
             "Expected a 1-channel or 3-channel NCHW image input"
         }
@@ -284,19 +282,29 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
         val width = if (shape[3] > 0) shape[3].toInt() else DEFAULT_TILE
         check(width > 2 * PAD && height > 2 * PAD) { "The model input is too small to tile" }
 
-        val probe = runTile(session, name, FloatArray(channels * height * width), height, width, channels).shape
+        val probe = runTile(session, name, FloatArray(channels * height * width), height, width, channels, tensorInfo.type).shape
         check(
             probe.size == 4 && probe[0] == 1L && probe[1] == channels.toLong() &&
                 probe[2] % height == 0L && probe[3] % width == 0L && probe[2] / height == probe[3] / width,
         ) { "Unsupported model output shape: ${probe.joinToString()}" }
         val factor = (probe[3] / width).toInt()
         check(factor in 1..4) { "Unsupported scale: $factor" }
-        return Spec(name, width, height, factor, channels)
+        return Spec(name, width, height, factor, channels, tensorInfo.type)
     }
 
-    private fun runTile(session: OrtSession, name: String, data: FloatArray, height: Int, width: Int, channels: Int): TileResult {
+    private fun runTile(session: OrtSession, name: String, data: FloatArray, height: Int, width: Int, channels: Int, inputType: OnnxJavaType): TileResult {
         val shape = longArrayOf(1, channels.toLong(), height.toLong(), width.toLong())
-        OnnxTensor.createTensor(env, FloatBuffer.wrap(data), shape).use { input ->
+        val tensor = if (inputType == OnnxJavaType.FLOAT16) {
+            val byteBuffer = ByteBuffer.allocateDirect(data.size * 2).order(ByteOrder.nativeOrder())
+            val shortBuffer = byteBuffer.asShortBuffer()
+            for (f in data) {
+                shortBuffer.put(floatToHalf(f))
+            }
+            OnnxTensor.createTensor(env, byteBuffer, shape, OnnxJavaType.FLOAT16)
+        } else {
+            OnnxTensor.createTensor(env, FloatBuffer.wrap(data), shape)
+        }
+        tensor.use { input ->
             session.run(mapOf(name to input)).use { result ->
                 val output = result[0] as OnnxTensor
                 val buffer = output.floatBuffer
@@ -304,6 +312,18 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
                 buffer.get(values)
                 return TileResult(output.info.shape, values)
             }
+        }
+    }
+
+    private fun floatToHalf(f: Float): Short {
+        val bits = java.lang.Float.floatToIntBits(f)
+        val s = (bits ushr 16) and 0x8000
+        val exp = ((bits ushr 23) and 0xFF) - 112
+        val mant = bits and 0x007FFFFF
+        return when {
+            exp <= 0 -> 0.toShort()
+            exp >= 31 -> (s or 0x7C00).toShort()
+            else -> (s or (exp shl 10) or (mant ushr 13)).toShort()
         }
     }
 
