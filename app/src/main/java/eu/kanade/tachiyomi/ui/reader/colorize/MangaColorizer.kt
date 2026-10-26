@@ -16,6 +16,7 @@ import java.io.Closeable
 import java.io.File
 import java.nio.FloatBuffer
 import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 
 /**
  * Runs the Manga Light V6 generator (v6_generator.onnx) on a page.
