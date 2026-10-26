@@ -105,7 +105,28 @@ object PageColorizer {
 
     fun modelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), COLORIZER_FILE)
 
-    fun upscalerModelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), UPSCALER_FILE)
+    /**
+     * كشف ديناميكي لملف نموذج التكبير أو التصفية: يدعم الاسم الافتراضي أو أي ملف .onnx متوفر في المجلد.
+     */
+    fun upscalerModelFile(context: Context): File {
+        val dir = File(context.filesDir, MODEL_DIR)
+        val defaultFile = File(dir, UPSCALER_FILE)
+        if (defaultFile.exists()) return defaultFile
+
+        // البحث التلقائي عن أي ملف ONNX بديل (مثل Restore_L.onnx أو Upscale_Denoise_L.onnx)
+        val alternativeFile = dir.listFiles { _, name ->
+            name.endsWith(".onnx", true) &&
+                name != COLORIZER_FILE &&
+                !name.equals("v6_sam_encoder.onnx", true)
+        }?.firstOrNull()
+
+        if (alternativeFile != null) {
+            logcat(LogPriority.DEBUG) { "Found alternative upscaler/restorer model: ${alternativeFile.name}" }
+            return alternativeFile
+        }
+
+        return defaultFile
+    }
 
     fun samModelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), "v6_sam_encoder.onnx")
 
@@ -423,16 +444,15 @@ object PageColorizer {
         val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
         return colorizerManager.getOrPut(key) {
             val guide = if (sam) {
-    try {
-        SamFeatureProvider.load(samModelFile(context), Acceleration.CPU, AiConfig.aiThreads)
-    } catch (e: Throwable) {
-        // تسجيل الخطأ بالصيغة المطلوبة
-        logcat(LogPriority.ERROR, e) { "SAM encoder: failed to load model file" }
-        null
-    }
-} else {
-    null
-}
+                try {
+                    SamFeatureProvider.load(samModelFile(context), Acceleration.CPU, AiConfig.aiThreads)
+                } catch (e: Throwable) {
+                    logcat(LogPriority.ERROR, e) { "SAM encoder: failed to load model file" }
+                    null
+                }
+            } else {
+                null
+            }
 
             MangaColorizer(model, acceleration, AiConfig.aiThreads, guide)
         }
@@ -484,7 +504,6 @@ object PageColorizer {
         sam: Boolean,
     ): String {
         val color = if (intensity < 0f) "n" else (intensity * 100).roundToInt().toString()
-        // upscaleMaxOutputPixels في اسم الملف حتى لا تُقرأ صور ضخمة قديمة من الكاش بعد تغيير السقف
         val upscaleStamp = if (upscale) "${upscaleModel.length()}_${AiConfig.upscaleMaxOutputPixels / 1_000_000}" else "n"
         return "${imageHash}_c${color}${if (sam) "s" else ""}_${colorModel.length()}_u${upscaleStamp}_s$shrinkSide"
     }
@@ -500,7 +519,6 @@ object PageColorizer {
     private fun saveCachedPage(file: File, data: ByteArray) {
         val dir = file.parentFile ?: return
         dir.mkdirs()
-        // اسم مؤقت فريد حتى لا يكتب مساران في الملف نفسه معاً ويتلفا الناتج
         val temp = File(dir, "${file.name}.${System.nanoTime()}.tmp")
         temp.writeBytes(data)
         temp.renameTo(file)
@@ -533,7 +551,6 @@ object PageColorizer {
             data[i] = chroma.a[i].coerceIn(-127f, 127f).roundToInt().toByte()
             data[CHROMA_SIZE + i] = chroma.b[i].coerceIn(-127f, 127f).roundToInt().toByte()
         }
-        // اسم مؤقت فريد كما في saveCachedPage
         val temp = File(dir, "${file.name}.${System.nanoTime()}.tmp")
         temp.writeBytes(data)
         temp.renameTo(file)
@@ -542,9 +559,7 @@ object PageColorizer {
 
     // endregion
 
-    /** Deletes the least recently used entries once the folder grows past [limit] bytes. */
     private fun trimCache(dir: File, limit: Long) {
-        // تجاهل الملفات المؤقتة الناقلة حتى لا تُحذف أثناء الكتابة
         val files = dir.listFiles()
             ?.filter { !it.name.endsWith(".tmp") }
             ?.sortedBy { it.lastModified() }
