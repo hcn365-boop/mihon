@@ -25,7 +25,12 @@ import java.nio.FloatBuffer
  *
  * Not thread safe: call it from one coroutine at a time.
  */
-class MangaColorizer(modelFile: File, acceleration: Acceleration = Acceleration.CPU, threads: Int = 0) : Closeable {
+class MangaColorizer(
+    modelFile: File,
+    acceleration: Acceleration = Acceleration.CPU,
+    threads: Int = 0,
+    private val guide: SamFeatures? = null,
+) : Closeable {
     /** Predicted Lab a/b channels at 512x512, in float Lab units. About 2 MB per page. */
     class Chroma(val a: FloatArray, val b: FloatArray)
 
@@ -124,9 +129,8 @@ class MangaColorizer(modelFile: File, acceleration: Acceleration = Acceleration.
 
             val inputs = mapOf(
                 INPUT_IMAGE to tensor(image, 1, 1, SIDE.toLong(), SIDE.toLong()),
-                // Automatic mode: no SAM features and no WD14 guidance, so these stay zero.
-                INPUT_SAM0 to tensor(FloatArray(256 * 32 * 32), 1, 256, 32, 32),
-                INPUT_SAM1 to tensor(FloatArray(256 * 16 * 16), 1, 256, 16, 16),
+                INPUT_SAM0 to tensor(guide?.level0 ?: FloatArray(256 * 32 * 32), 1, 256, 32, 32),
+                INPUT_SAM1 to tensor(guide?.level1 ?: FloatArray(256 * 16 * 16), 1, 256, 16, 16),
                 INPUT_WD14 to tensor(FloatArray(1024), 1, 1024),
             )
             session.run(inputs).use { result ->
