@@ -6,6 +6,8 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import ai.onnxruntime.TensorInfo
 import android.graphics.Bitmap
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
 import org.opencv.core.Core
@@ -45,10 +47,12 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
 
     init {
         check(OpenCVLoader.initLocal()) { "OpenCV native library failed to load" }
+        logcat(LogPriority.DEBUG) { "Loading model from path: ${modelFile.absolutePath}" }
         session = OrtSessions.create(env, modelFile.absolutePath, acceleration, threads)
         spec = try {
             inspect(session)
         } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "Failed to inspect model structure" }
             session.close()
             throw e
         }
@@ -274,6 +278,8 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
         val tensorInfo = session.inputInfo.getValue(name).info as? TensorInfo
             ?: error("The model input is not a tensor")
         val shape = tensorInfo.shape
+        logcat(LogPriority.DEBUG) { "Inspecting model input '$name' with shape: ${shape.contentToString()} and type: ${tensorInfo.type}" }
+        
         check(shape.size == 4 && (shape[1] == 1L || shape[1] == 3L)) {
             "Expected a 1-channel or 3-channel NCHW image input"
         }
@@ -283,6 +289,8 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
         check(width > 2 * PAD && height > 2 * PAD) { "The model input is too small to tile" }
 
         val probe = runTile(session, name, FloatArray(channels * height * width), height, width, channels, tensorInfo.type).shape
+        logcat(LogPriority.DEBUG) { "Model probe output shape: ${probe.contentToString()}" }
+        
         check(
             probe.size == 4 && probe[0] == 1L && probe[1] == channels.toLong() &&
                 probe[2] % height == 0L && probe[3] % width == 0L && probe[2] / height == probe[3] / width,
@@ -305,12 +313,17 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
             OnnxTensor.createTensor(env, FloatBuffer.wrap(data), shape)
         }
         tensor.use { input ->
-            session.run(mapOf(name to input)).use { result ->
-                val output = result[0] as OnnxTensor
-                val buffer = output.floatBuffer
-                val values = FloatArray(buffer.remaining())
-                buffer.get(values)
-                return TileResult(output.info.shape, values)
+            try {
+                session.run(mapOf(name to input)).use { result ->
+                    val output = result[0] as OnnxTensor
+                    val buffer = output.floatBuffer
+                    val values = FloatArray(buffer.remaining())
+                    buffer.get(values)
+                    return TileResult(output.info.shape, values)
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { "Error executing session.run for tile" }
+                throw e
             }
         }
     }
