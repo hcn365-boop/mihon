@@ -50,7 +50,7 @@ class MangaColorizer(
         }
     }
 
-    fun predict(input: Bitmap): Chroma = Mats().use { m ->
+    fun predict(input: Bitmap, customGuide: SamFeatures? = null): Chroma = Mats().use { m ->
         val rgba = m.mat()
         toMat(input, rgba)
         val gray = m.mat()
@@ -62,7 +62,7 @@ class MangaColorizer(
         val pixels = FloatArray(PLANE)
         small.get(0, 0, pixels)
 
-        val rgbPlanes = runModel(pixels)
+        val rgbPlanes = runModel(pixels, customGuide)
         val planes = List(3) { c ->
             m.mat(SIDE, SIDE, CvType.CV_32F).also { it.put(0, 0, rgbPlanes.copyOfRange(c * PLANE, (c + 1) * PLANE)) }
         }
@@ -123,7 +123,8 @@ class MangaColorizer(
     }
 
     /** Returns the model output as 3 consecutive 512x512 planes (R, G, B), values in [-1, 1]. */
-    private fun runModel(image: FloatArray): FloatArray {
+    private fun runModel(image: FloatArray, customGuide: SamFeatures? = null): FloatArray {
+        val activeGuide = customGuide ?: guide
         val tensors = ArrayList<OnnxTensor>()
         try {
             fun tensor(data: FloatArray, vararg shape: Long): OnnxTensor =
@@ -131,9 +132,8 @@ class MangaColorizer(
 
             val inputs = mapOf(
                 INPUT_IMAGE to tensor(image, 1, 1, SIDE.toLong(), SIDE.toLong()),
-                // تم تعديل الأبعاد هنا لتتوافق مع مخرجات النموذج الجديد (64x64 و 32x32)
-                INPUT_SAM0 to tensor(guide?.level0 ?: FloatArray(256 * 64 * 64), 1, 256, 64, 64),
-                INPUT_SAM1 to tensor(guide?.level1 ?: FloatArray(256 * 32 * 32), 1, 256, 32, 32),
+                INPUT_SAM0 to tensor(activeGuide?.level0 ?: FloatArray(256 * 64 * 64), 1, 256, 64, 64),
+                INPUT_SAM1 to tensor(activeGuide?.level1 ?: FloatArray(256 * 32 * 32), 1, 256, 32, 32),
                 INPUT_WD14 to tensor(FloatArray(1024), 1, 1024),
             )
             session.run(inputs).use { result ->
