@@ -422,7 +422,18 @@ object PageColorizer {
         val setup = "$acceleration/${AiConfig.aiThreads}/sam=$sam"
         val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
         return colorizerManager.getOrPut(key) {
-            val guide = if (sam) SamFeatureProvider.load(samModelFile(context), Acceleration.CPU, AiConfig.aiThreads) else null
+            val guide = if (sam) {
+    try {
+        SamFeatureProvider.load(samModelFile(context), Acceleration.CPU, AiConfig.aiThreads)
+    } catch (e: Throwable) {
+        // تسجيل الخطأ بالصيغة المطلوبة
+        logcat(LogPriority.ERROR, e) { "SAM encoder: failed to load model file" }
+        null
+    }
+} else {
+    null
+}
+
             MangaColorizer(model, acceleration, AiConfig.aiThreads, guide)
         }
     }
