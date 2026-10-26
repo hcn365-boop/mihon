@@ -71,11 +71,13 @@ internal fun AiSettingsContent(
     var upscalerInstalled by remember {
         mutableStateOf(ColorizerModelInstaller.isInstalled(context, ModelKind.UPSCALER))
     }
+    var samInstalled by remember { mutableStateOf(ColorizerModelInstaller.isInstalled(context, ModelKind.COLORIZER_SAM)) }
     var importKind by remember { mutableStateOf(ModelKind.COLORIZER) }
 
     fun refresh() {
         colorizerInstalled = ColorizerModelInstaller.isInstalled(context)
         upscalerInstalled = ColorizerModelInstaller.isInstalled(context, ModelKind.UPSCALER)
+        samInstalled = ColorizerModelInstaller.isInstalled(context, ModelKind.COLORIZER_SAM)
     }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -89,7 +91,11 @@ internal fun AiSettingsContent(
 
     fun download(kind: ModelKind) {
         if (status.isNotEmpty()) return
-        val url = if (kind == ModelKind.COLORIZER) prefs.colorizeModelUrl.get() else prefs.upscaleModelUrl.get()
+        val url = when (kind) {
+            ModelKind.COLORIZER -> prefs.colorizeModelUrl.get()
+            ModelKind.UPSCALER -> prefs.upscaleModelUrl.get()
+            ModelKind.COLORIZER_SAM -> prefs.colorizeSamModelUrl.get()
+        }
         scope.launch {
             runInstall(context, { status = it }) {
                 ColorizerModelInstaller.downloadModel(context, kind, url) { progress ->
@@ -104,6 +110,7 @@ internal fun AiSettingsContent(
 
     val colorizeEnabled by prefs.colorizeEnabled.collectAsState()
     CheckboxItem(label = "Colorize pages (Manga Light V6)", pref = prefs.colorizeEnabled)
+    CheckboxItem(label = "Use the SAM encoder guide (needs the SAM encoder file)", pref = prefs.colorizeUseSam)
     if (colorizeEnabled) {
         IntSlider("Color intensity", prefs.colorizeIntensity, 0..120) { "$it%" }
     }
@@ -143,6 +150,17 @@ internal fun AiSettingsContent(
         },
     )
     UrlField("Upscaler model link", prefs.upscaleModelUrl)
+    ModelRow(
+        title = "SAM encoder (optional)",
+        installed = samInstalled,
+        status = status,
+        onDownload = { download(ModelKind.COLORIZER_SAM) },
+        onImport = {
+            importKind = ModelKind.COLORIZER_SAM
+            importLauncher.launch(arrayOf("*/*"))
+        },
+    )
+    UrlField("SAM encoder link", prefs.colorizeSamModelUrl)
 
     // endregion
 
