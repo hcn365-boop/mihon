@@ -3,6 +3,8 @@ package eu.kanade.tachiyomi.ui.reader.colorize
 import android.content.Context
 import android.net.Uri
 import ai.onnxruntime.OrtEnvironment
+import logcat.LogPriority
+import tachiyomi.core.common.util.system.logcat
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import tachiyomi.core.common.util.lang.withIOContext
@@ -11,21 +13,16 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** The two models the reader can use. [minBytes] rejects files that are obviously not the model. */
 enum class ModelKind(val minBytes: Long) {
     COLORIZER(1L * 1024 * 1024),
-    UPSCALER(2L * 1024), // تم تخفيض الحد الأدنى لقبول نماذج التنقية الخفيفة الجديدة
+    UPSCALER(2L * 1024),
     COLORIZER_SAM(1L * 1024 * 1024),
 }
 
-/**
- * Puts the AI models where [PageColorizer] expects them.
- */
 object ColorizerModelInstaller {
 
     private const val BUFFER_SIZE = 64 * 1024
 
-    /** Hugging Face file pages use /blob/, but the raw file is served from /resolve/. */
     fun normalizeUrl(url: String): String = url.trim().replace("/blob/", "/resolve/")
 
     fun modelFile(context: Context, kind: ModelKind): File = when (kind) {
@@ -117,6 +114,7 @@ object ColorizerModelInstaller {
                 ModelKind.COLORIZER_SAM -> OrtSessions.create(OrtEnvironment.getEnvironment(), temp.absolutePath, Acceleration.CPU, 0).close()
             }
         } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Model installation validation failed for ${kind.name}" }
             throw IOException("This is not a valid ${kind.name.lowercase()} model: ${e.message}", e)
         }
         val target = modelFile(context, kind)
@@ -124,5 +122,6 @@ object ColorizerModelInstaller {
         if (!temp.renameTo(target)) {
             temp.copyTo(target, overwrite = true)
         }
+        logcat(LogPriority.DEBUG) { "Model ${kind.name} successfully installed and verified." }
     }
 }
