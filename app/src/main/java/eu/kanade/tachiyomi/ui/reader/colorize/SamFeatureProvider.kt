@@ -75,7 +75,23 @@ object SamFeatureProvider {
             val count = shape.fold(1L) { total, size -> total * size }.toInt()
             OnnxTensor.createTensor(env, FloatBuffer.allocate(count), shape).use { input ->
                 session.run(mapOf(name to input)).use { result ->
-                    return parseResult(result, shape)
+                    var level0: FloatArray? = null
+                    var level1: FloatArray? = null
+                    val seen = ArrayList<String>()
+                    for (i in 0 until result.size()) {
+                        val tensor = result.get(i) as? OnnxTensor ?: continue
+                        val s = tensor.info.shape
+                        seen.add(s.joinToString("x"))
+                        if (s.size == 4 && s[1] == 256L && s[2] == 64L && s[3] == 64L) level0 = read(tensor, LEVEL0_SIZE)
+                        if (s.size == 4 && s[1] == 256L && s[2] == 32L && s[3] == 32L) level1 = read(tensor, LEVEL1_SIZE)
+                    }
+                    if (level0 == null || level1 == null) {
+                        logcat(LogPriority.ERROR) {
+                            "SAM encoder: input ${shape.joinToString("x")}, outputs ${seen.joinToString()} (need 1x256x64x64 and 1x256x32x32)"
+                        }
+                        return null
+                    }
+                    return SamFeatures(level0, level1)
                 }
             }
         }
@@ -105,30 +121,26 @@ object SamFeatureProvider {
 
             OnnxTensor.createTensor(env, FloatBuffer.wrap(floatData), shape).use { input ->
                 session.run(mapOf(name to input)).use { result ->
-                    return parseResult(result, shape)
+                    var level0: FloatArray? = null
+                    var level1: FloatArray? = null
+                    val seen = ArrayList<String>()
+                    for (i in 0 until result.size()) {
+                        val tensor = result.get(i) as? OnnxTensor ?: continue
+                        val s = tensor.info.shape
+                        seen.add(s.joinToString("x"))
+                        if (s.size == 4 && s[1] == 256L && s[2] == 64L && s[3] == 64L) level0 = read(tensor, LEVEL0_SIZE)
+                        if (s.size == 4 && s[1] == 256L && s[2] == 32L && s[3] == 32L) level1 = read(tensor, LEVEL1_SIZE)
+                    }
+                    if (level0 == null || level1 == null) {
+                        logcat(LogPriority.ERROR) {
+                            "SAM encoder: input ${shape.joinToString("x")}, outputs ${seen.joinToString()} (need 1x256x64x64 and 1x256x32x32)"
+                        }
+                        return null
+                    }
+                    return SamFeatures(level0, level1)
                 }
             }
         }
-    }
-
-    private fun parseResult(result: ai.onnxruntime.Result, shape: LongArray): SamFeatures? {
-        var level0: FloatArray? = null
-        var level1: FloatArray? = null
-        val seen = ArrayList<String>()
-        for (i in 0 until result.size()) {
-            val tensor = result[i] as? OnnxTensor ?: continue
-            val s = tensor.info.shape
-            seen.add(s.joinToString("x"))
-            if (s.size == 4 && s[1] == 256L && s[2] == 64L && s[3] == 64L) level0 = read(tensor, LEVEL0_SIZE)
-            if (s.size == 4 && s[1] == 256L && s[2] == 32L && s[3] == 32L) level1 = read(tensor, LEVEL1_SIZE)
-        }
-        if (level0 == null || level1 == null) {
-            logcat(LogPriority.ERROR) {
-                "SAM encoder: input ${shape.joinToString("x")}, outputs ${seen.joinToString()} (need 1x256x64x64 and 1x256x32x32)"
-            }
-            return null
-        }
-        return SamFeatures(level0, level1)
     }
 
     private fun bitmapToFloatArray(bitmap: Bitmap, targetWidth: Int, targetHeight: Int): FloatArray {
