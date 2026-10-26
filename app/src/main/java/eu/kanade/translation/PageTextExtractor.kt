@@ -378,35 +378,36 @@ internal object TextBlockMerger {
             a.y < b.y + b.height && a.y + a.height > b.y
     }
 
+    // الدالة المحدثة التي طلبت استخدامها
     private fun shouldMergeTextBlock(
-        r1: TranslationBlock, r2: TranslationBlock,
-        xThreshold: Float, yThresholdFactor: Float,
+        r1: TranslationBlock,
+        r2: TranslationBlock,
+        xThreshold: Float,
+        yThresholdFactor: Float,
     ): Boolean {
         val angleDiff = abs(r1.angle - r2.angle)
         val angleSimilar = angleDiff < 15 || abs(angleDiff - 180) < 15
         if (!angleSimilar) return false
 
-        val minSymWidth = min(r1.symWidth, r2.symWidth)
-        val maxSymWidth = max(r1.symWidth, r2.symWidth)
-        val minSymHeight = min(r1.symHeight, r2.symHeight)
-        val maxSymHeight = max(r1.symHeight, r2.symHeight)
-        val sizeRatioLimit = 3f
-        if (maxSymWidth / minSymWidth > sizeRatioLimit || maxSymHeight / minSymHeight > sizeRatioLimit) return false
-
-        val sH = max(minSymHeight, 12f)
-        val sW = max(minSymWidth, 12f)
-        val maxAllowedGapX = sW * 1.2f
-        val maxAllowedGapY = sH * 1.2f
         val isVertical = abs(r1.angle) in 70.0..110.0
 
-        val r1Right = r1.x + r1.width; val r1Bottom = r1.y + r1.height
-        val r2Right = r2.x + r2.width; val r2Bottom = r2.y + r2.height
+        val r1Right = r1.x + r1.width
+        val r1Bottom = r1.y + r1.height
+        val r2Right = r2.x + r2.width
+        val r2Bottom = r2.y + r2.height
+
+        val sH = max(r1.symHeight, max(r2.symHeight, 12f))
+        val sW = max(r1.symWidth, max(r2.symWidth, 12f))
+
+        val maxAllowedGapX = sW * 1.2f
+        val maxAllowedGapY = sH * 1.2f
 
         val yOverlap = max(0f, min(r1Bottom, r2Bottom) - max(r1.y, r2.y))
         val xOverlap = max(0f, min(r1Right, r2Right) - max(r1.x, r2.x))
 
         val minHeight = min(r1.height, r2.height)
         val isFullVerticalCover = yOverlap >= (minHeight * 0.75f)
+
         val minWidth = min(r1.width, r2.width)
         val isFullHorizontalCover = xOverlap >= (minWidth * 0.95f)
         val isInCross = isFullHorizontalCover || isFullVerticalCover
@@ -416,11 +417,15 @@ internal object TextBlockMerger {
             val sideGap = if (r1.x < r2.x) r2.x - r1Right else r1.x - r2Right
             if (sideGap > maxAllowedGapX) return false
             if (isFullVerticalCover && sideGap <= 0f) return true
+
             val vertGap = if (r1.y < r2.y) r2.y - r1Bottom else r1.y - r2Bottom
             if (vertGap > maxAllowedGapY) return false
+
             val isTouchingOrClose = sideGap <= (sW * 1.2f) && vertGap <= (sH * 1.2f)
             if (!isTouchingOrClose) return false
-            val dy = abs(r1.y - r2.y); val dx = abs(r1.x - r2.x)
+
+            val dy = abs(r1.y - r2.y)
+            val dx = abs(r1.x - r2.x)
             val isOriginsClose = dy < (sH * 1.2f) && dx < (sW * 1.2f)
             val isSideBySide = sideGap < (sW * 1.2f) && dy < (sH * 1.2f)
             val alignedVertically = yOverlap > (sH * 0.15f)
@@ -430,10 +435,13 @@ internal object TextBlockMerger {
             val vGap = max(0f, if (r1.y < r2.y) r2.y - r1Bottom else r1.y - r2Bottom)
             if (vGap > maxAllowedGapY) return false
             if (isFullHorizontalCover && vGap <= maxAllowedGapY) return true
+
             val sideGap = if (r1.x < r2.x) r2.x - r1Right else r1.x - r2Right
             if (sideGap > maxAllowedGapX) return false
+
             val hasHighSideOverlap = xOverlap > (minWidth * 0.70f)
-            val centerR1X = r1.x + r1.width / 2f; val centerR2X = r2.x + r2.width / 2f
+            val centerR1X = r1.x + r1.width / 2f
+            val centerR2X = r2.x + r2.width / 2f
             val centersAligned = abs(centerR1X - centerR2X) < max(r1.width, r2.width) * 0.35f
             val isTouching = vGap <= maxAllowedGapY
             return (hasHighSideOverlap || centersAligned) && isTouching
