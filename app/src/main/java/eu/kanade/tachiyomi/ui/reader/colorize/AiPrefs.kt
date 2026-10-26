@@ -21,6 +21,7 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
     val colorizeIntensity: Preference<Int> = own(base.colorizeIntensity)
     val colorizeMaxMegapixels: Preference<Int> = own(base.colorizeMaxMegapixels)
     val colorizePreloadCount: Preference<Int> = own(base.colorizePreloadCount)
+    val colorizeUseSam: Preference<Boolean> = own(base.colorizeUseSam)
 
     val upscaleEnabled: Preference<Boolean> = own(base.upscaleEnabled)
     val upscaleMaxMegapixels: Preference<Int> = own(base.upscaleMaxMegapixels)
@@ -54,6 +55,7 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
     // region Always general
 
     val colorizeModelUrl: Preference<String> = base.colorizeModelUrl
+    val colorizeSamModelUrl: Preference<String> = base.colorizeSamModelUrl
     val upscaleModelUrl: Preference<String> = base.upscaleModelUrl
     val colorizeAcceleration: Preference<String> = base.colorizeAcceleration
     val upscaleAcceleration: Preference<String> = base.upscaleAcceleration
@@ -90,6 +92,7 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         reset(colorizeIntensity)
         reset(colorizeMaxMegapixels)
         reset(colorizePreloadCount)
+        reset(colorizeUseSam)
         reset(upscaleEnabled)
         reset(upscaleMaxMegapixels)
         reset(upscaleMaxOutputMegapixels)
@@ -134,6 +137,7 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         copy(base.colorizeIntensity)
         copy(base.colorizeMaxMegapixels)
         copy(base.colorizePreloadCount)
+        copy(base.colorizeUseSam)
         copy(base.upscaleEnabled)
         copy(base.upscaleMaxMegapixels)
         copy(base.upscaleMaxOutputMegapixels)
