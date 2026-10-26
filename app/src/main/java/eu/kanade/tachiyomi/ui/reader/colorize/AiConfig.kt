@@ -49,6 +49,7 @@ class TranslationConfig(
 object AiConfig {
 
     @Volatile var colorizeEnabled = false
+    @Volatile var colorizeUseSam = false
 
     /** 0 = no color, 1 = model color, up to 1.2 */
     @Volatile var colorizeIntensity = 1f
@@ -162,6 +163,7 @@ object AiConfig {
         }
 
         bind(p.colorizeEnabled, true) { colorizeEnabled = it }
+        bind(p.colorizeUseSam, true) { colorizeUseSam = it }
         bind(p.colorizeIntensity, true) { colorizeIntensity = it / 100f }
         bind(p.upscaleEnabled, true) { upscaleEnabled = it }
         bind(p.colorizeMaxMegapixels, true) { colorizeMaxPixels = it * 1_000_000L }
