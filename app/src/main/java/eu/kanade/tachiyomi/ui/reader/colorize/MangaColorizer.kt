@@ -125,14 +125,6 @@ class MangaColorizer(
     /** Returns the model output as 3 consecutive 512x512 planes (R, G, B), values in [-1, 1]. */
     private fun runModel(image: FloatArray): FloatArray {
         val tensors = ArrayList<OnnxTensor>()
-        // داخل runModel عند تجهيز التنسورات (Tensors) للمدخلات:
-        // إذا حدث خطأ في أبعاد نموذج SAM أو لمطابقة الشكل المطلوب:
-logcat(LogPriority.ERROR) { "SAM encoder: unexpected shapes or failed to read outputs (e.g., got shapes like $outputShapes)" }
-
-catch (e: Throwable) {
-    logcat(LogPriority.ERROR, e) { "SAM encoder: failed to process or load features" }
-}
-
         try {
             fun tensor(data: FloatArray, vararg shape: Long): OnnxTensor =
                 OnnxTensor.createTensor(env, FloatBuffer.wrap(data), shape).also { tensors.add(it) }
@@ -146,6 +138,9 @@ catch (e: Throwable) {
             session.run(inputs).use { result ->
                 val output = result[0] as OnnxTensor
                 val expected = longArrayOf(1, 3, SIDE.toLong(), SIDE.toLong())
+                if (!output.info.shape.contentEquals(expected)) {
+                    logcat(LogPriority.ERROR) { "SAM encoder: unexpected shapes or failed to output expected shape (got ${output.info.shape.joinToString()})" }
+                }
                 require(output.info.shape.contentEquals(expected)) {
                     "Unexpected model output shape: ${output.info.shape.joinToString()}"
                 }
@@ -153,6 +148,9 @@ catch (e: Throwable) {
                 output.floatBuffer.get(values)
                 return values
             }
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "SAM encoder: failed to process features" }
+            throw e
         } finally {
             tensors.forEach { it.close() }
         }
