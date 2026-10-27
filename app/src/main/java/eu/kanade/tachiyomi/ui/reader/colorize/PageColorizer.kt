@@ -101,7 +101,7 @@ object PageColorizer {
     }
 
     private val colorizerManager = EngineManager<MangaColorizer>(maxEntries = 1)
-    private val upscalerManager = EngineManager<Anime4kUpscaler>(maxEntries = 1)
+    private val upscalerManager = EngineManager<PageUpscaler>(maxEntries = 1)
 
     fun modelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), COLORIZER_FILE)
 
@@ -187,7 +187,7 @@ object PageColorizer {
         val upscaleModel = upscalerModelFile(context)
         val intensity = AiConfig.colorizeIntensity
         val wantColor = AiConfig.colorizeEnabled && intensity > 0f && colorModel.length() > 0
-        val wantUpscale = AiConfig.upscaleEnabled && upscaleModel.length() > 0
+        val wantUpscale = AiConfig.upscaleEnabled && upscaleReady(context)
         val translation = if (translate) AiConfig.translation else null
         val wantShrink = AiConfig.normalizeSide > 0
         if (!wantColor && !wantUpscale && !wantShrink && translation == null) return null
@@ -215,7 +215,7 @@ object PageColorizer {
 
         val imageHash = hash(bytes)
         val shrinkSide = if (doShrink) normalize else 0
-        val baseName = baseName(imageHash, if (doColor) intensity else -1f, doUpscale, shrinkSide, colorModel, upscaleModel, samActive(context))
+        val baseName = baseName(context, imageHash, if (doColor) intensity else -1f, doUpscale, shrinkSide, colorModel, samActive(context))
         val effective = translationConfig?.effectiveSettings()
         val finalName = translationConfig?.let { config ->
             val s = effective!!
@@ -281,7 +281,7 @@ object PageColorizer {
             val upscale = doUpscale && !original.hasAlpha()
             if (color && !looksGrayscale(working)) color = false
             if (!color && !upscale && working === original) return null
-            if (estimateBytes(pixels, color, upscale) > AiConfig.memoryBudgetBytes) return null
+            if (estimateBytes(pixels, color, upscale, upscaleScale()) > AiConfig.memoryBudgetBytes) return null
 
             // One page at a time: keeps peak memory low and protects the ONNX sessions.
             val processed = try {
@@ -297,7 +297,7 @@ object PageColorizer {
                         page = engine.render(working, chroma, intensity)
                     }
                     if (upscale) {
-                        var enlarged = upscalerEngine(upscalerModelFile(context)).upscale(page)
+                        var enlarged = (upscalerEngine(context) ?: error("No upscaler model")).process(page)
                         if (page !== working) page.recycle()
                         // A result that is too big is scaled down: the viewer needs a full buffer per page.
                         val outputPixels = enlarged.width.toLong() * enlarged.height
@@ -397,7 +397,7 @@ object PageColorizer {
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return
         val pixels = bounds.outWidth.toLong() * bounds.outHeight
         if (pixels > AiConfig.colorizeMaxPixels) return
-        if (estimateBytes(pixels, true, false) > AiConfig.memoryBudgetBytes) return
+        if (estimateBytes(pixels, true, false, 1) > AiConfig.memoryBudgetBytes) return
         val chromaFile = chromaFile(context, hash(bytes), model)
         if (chromaFile.isFile) return
         val original = decode(bytes) ?: return
@@ -415,11 +415,10 @@ object PageColorizer {
      * Rough peak memory for one page, in bytes, from its pixel count. It is an estimate,
      * not a hard limit: the system may still run out of memory (the page is then left as it is).
      */
-    private fun estimateBytes(pixels: Long, color: Boolean, upscale: Boolean): Long {
-        var total = pixels * 4 // decoded page
+    private fun estimateBytes(pixels: Long, color: Boolean, upscale: Boolean, scale: Int): Long {
+        var total = pixels * 4
         if (color) total += pixels * 20
-        // ACNet doubles each side: 4x the pixels at about 21 bytes per output pixel.
-        if (upscale) total += pixels * 14 + pixels * 4 * 21
+        if (upscale) total += pixels * 14 + pixels * scale * scale * 21
         return total
     }
 
@@ -458,13 +457,50 @@ object PageColorizer {
         }
     }
 
-    private fun upscalerEngine(model: File): Anime4kUpscaler {
+    private fun useModels() = AiConfig.upscaleEngine == "ANIME4K_ONNX"
+
+    /** The Anime4K model files chosen in the settings, in the order they run (restore first). */
+    private fun chosenModelFiles(context: Context): List<File> =
+        listOf(AiConfig.upscaleRestoreModel, AiConfig.upscaleMainModel)
+            .filter { it.isNotEmpty() }
+            .map { Anime4kModels.file(context, it) }
+
+    /** True when the chosen upscaler can run, because its model files are on the phone. */
+    private fun upscaleReady(context: Context): Boolean =
+        if (useModels()) {
+            chosenModelFiles(context).let { files -> files.isNotEmpty() && files.all { it.length() > 0 } }
+        } else {
+            upscalerModelFile(context).length() > 0
+        }
+
+    /** How many times the chosen upscaler enlarges each side. */
+    private fun upscaleScale(): Int =
+        if (useModels()) {
+            Anime4kModels.scaleOf(AiConfig.upscaleRestoreModel) * Anime4kModels.scaleOf(AiConfig.upscaleMainModel)
+        } else {
+            2
+        }
+
+    private fun upscaleSignature(context: Context): String =
+        if (useModels()) {
+            "m_${AiConfig.upscaleRestoreModel}_${AiConfig.upscaleMainModel}"
+        } else {
+            upscalerModelFile(context).length().toString()
+        }
+
+    private fun upscalerEngine(context: Context): PageUpscaler? {
         val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
         val setup = "$acceleration/${AiConfig.aiThreads}"
-        val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
-        return upscalerManager.getOrPut(key) {
-            Anime4kUpscaler(model, acceleration, AiConfig.aiThreads)
+        if (useModels()) {
+            val files = chosenModelFiles(context)
+            if (files.isEmpty() || files.any { it.length() == 0L }) return null
+            val key = "models_${files.joinToString("|") { "${it.name}_${it.lastModified()}" }}_$setup"
+            return upscalerManager.getOrPut(key) { Anime4kStageUpscaler(files, acceleration, AiConfig.aiThreads) }
         }
+        val model = upscalerModelFile(context)
+        if (model.length() == 0L) return null
+        val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
+        return upscalerManager.getOrPut(key) { Anime4kUpscaler(model, acceleration, AiConfig.aiThreads) }
     }
 
     // endregion
@@ -495,16 +531,16 @@ object PageColorizer {
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
     private fun baseName(
+        context: Context,
         imageHash: String,
         intensity: Float,
         upscale: Boolean,
         shrinkSide: Int,
         colorModel: File,
-        upscaleModel: File,
         sam: Boolean,
     ): String {
         val color = if (intensity < 0f) "n" else (intensity * 100).roundToInt().toString()
-        val upscaleStamp = if (upscale) "${upscaleModel.length()}_${AiConfig.upscaleMaxOutputPixels / 1_000_000}" else "n"
+        val upscaleStamp = if (upscale) "${upscaleSignature(context)}_${AiConfig.upscaleMaxOutputPixels / 1_000_000}" else "n"
         return "${imageHash}_c${color}${if (sam) "s" else ""}_${colorModel.length()}_u${upscaleStamp}_s$shrinkSide"
     }
 
