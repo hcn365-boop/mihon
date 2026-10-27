@@ -29,15 +29,21 @@ internal object OrtSessions {
     fun create(env: OrtEnvironment, path: String, acceleration: Acceleration, threads: Int): OrtSession {
         if (acceleration == Acceleration.NNAPI) {
             try {
-                logcat(LogPriority.DEBUG) { "Attempting to create ONNX session with NNAPI acceleration..." }
+                logcat(LogPriority.DEBUG) { "Attempting to create ONNX session with NNAPI acceleration for model: $path" }
                 return env.createSession(path, options(threads).apply { addNnapi() }).also {
-                    logcat(LogPriority.DEBUG) { "Successfully created ONNX session with NNAPI." }
+                    logcat(LogPriority.DEBUG) { "Successfully created ONNX session with NNAPI acceleration." }
                 }
             } catch (e: Throwable) {
-                logcat(LogPriority.WARN, e) { "NNAPI acceleration failed, falling back to CPU session" }
+                // تسجيل الخطأ بتفاصيل كاملة (الرسالة والسبب) ومستوى ERROR لسهولة التتبع في Logcat
+                logcat(LogPriority.ERROR, e) { 
+                    "NNAPI acceleration failed for model: $path. " +
+                    "Error message: ${e.message}, " +
+                    "Cause: ${e.cause}. " +
+                    "Falling back to CPU session." 
+                }
             }
         }
-        logcat(LogPriority.DEBUG) { "Creating ONNX session with CPU acceleration (threads: $threads)" }
+        logcat(LogPriority.DEBUG) { "Creating ONNX session with CPU acceleration (threads: $threads) for model: $path" }
         return env.createSession(path, options(threads))
     }
 
