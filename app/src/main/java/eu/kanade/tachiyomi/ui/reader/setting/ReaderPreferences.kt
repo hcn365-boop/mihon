@@ -189,7 +189,17 @@ class ReaderPreferences(
     val upscaleNormalizeShortSide: Preference<Int> = preferenceStore.getInt("pref_upscale_normalize_side", 1080)
 
     val upscaleModelUrl: Preference<String> = preferenceStore.getString("pref_upscale_model_url", UPSCALE_MODEL_URL)
+    
+    // "ACNET" is the built-in Anime4K model; "ANIME4K_ONNX" runs the Anime4K models chosen below
+    val upscaleEngine: Preference<String> = preferenceStore.getString("pref_upscale_engine", "ACNET")
 
+    // Names (without .onnx) of the Anime4K models; empty means not used
+    val upscaleRestoreModel: Preference<String> = preferenceStore.getString("pref_upscale_restore_model", "")
+
+    val upscaleMainModel: Preference<String> = preferenceStore.getString("pref_upscale_main_model", "Upscale_L")
+
+    val upscaleModelsBaseUrl: Preference<String> =
+        preferenceStore.getString("pref_upscale_models_base_url", UPSCALE_MODELS_BASE_URL)
     val colorizeMaxMegapixels: Preference<Int> = preferenceStore.getInt("pref_colorize_max_mp", 12)
 
     val upscaleMaxMegapixels: Preference<Int> = preferenceStore.getInt("pref_upscale_max_mp", 3)
@@ -415,6 +425,8 @@ class ReaderPreferences(
             "2fb022c4ce55632b7671a1df306f63984928e36a/models/v6_generator.onnx"
 
         const val UPSCALE_MODEL_URL = "https://github.com/cliecy/CManga/raw/main/assets/models/anime4k_acnet.onnx"
+
+        const val UPSCALE_MODELS_BASE_URL = "https://github.com/kato-megumi/anime4kOnnx/raw/master/anime4kOnnx"
 
         const val COLORIZE_SAM_MODEL_URL =
             "https://huggingface.co/sharky172/manga-light-colorizer/resolve/main/models/v6_sam_encoder.onnx"
