@@ -24,6 +24,9 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
     val colorizeUseSam: Preference<Boolean> = own(base.colorizeUseSam)
 
     val upscaleEnabled: Preference<Boolean> = own(base.upscaleEnabled)
+    val upscaleEngine: Preference<String> = own(base.upscaleEngine)
+    val upscaleRestoreModel: Preference<String> = own(base.upscaleRestoreModel)
+    val upscaleMainModel: Preference<String> = own(base.upscaleMainModel)
     val upscaleMaxMegapixels: Preference<Int> = own(base.upscaleMaxMegapixels)
     val upscaleMaxOutputMegapixels: Preference<Int> = own(base.upscaleMaxOutputMegapixels)
     val upscaleNormalizeEnabled: Preference<Boolean> = own(base.upscaleNormalizeEnabled)
@@ -57,6 +60,7 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
     val colorizeModelUrl: Preference<String> = base.colorizeModelUrl
     val colorizeSamModelUrl: Preference<String> = base.colorizeSamModelUrl
     val upscaleModelUrl: Preference<String> = base.upscaleModelUrl
+    val upscaleModelsBaseUrl: Preference<String> = base.upscaleModelsBaseUrl
     val colorizeAcceleration: Preference<String> = base.colorizeAcceleration
     val upscaleAcceleration: Preference<String> = base.upscaleAcceleration
     val aiThreads: Preference<Int> = base.aiThreads
@@ -94,6 +98,9 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         reset(colorizePreloadCount)
         reset(colorizeUseSam)
         reset(upscaleEnabled)
+        reset(upscaleEngine)
+        reset(upscaleRestoreModel)
+        reset(upscaleMainModel)
         reset(upscaleMaxMegapixels)
         reset(upscaleMaxOutputMegapixels)
         reset(upscaleNormalizeEnabled)
@@ -139,6 +146,9 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         copy(base.colorizePreloadCount)
         copy(base.colorizeUseSam)
         copy(base.upscaleEnabled)
+        copy(base.upscaleEngine)
+        copy(base.upscaleRestoreModel)
+        copy(base.upscaleMainModel)
         copy(base.upscaleMaxMegapixels)
         copy(base.upscaleMaxOutputMegapixels)
         copy(base.upscaleNormalizeEnabled)
