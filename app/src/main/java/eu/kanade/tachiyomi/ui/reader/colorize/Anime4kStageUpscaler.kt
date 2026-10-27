@@ -247,8 +247,8 @@ class Anime4kStageUpscaler(files: List<File>, acceleration: Acceleration, thread
                     val value = mantissa * (1f / 16_777_216f) // subnormal: mantissa * 2^-24
                     if (sign != 0) -value else value
                 }
-                31 -> Float.intBitsToFloat(sign or 0x7F800000 or (mantissa shl 13))
-                else -> Float.intBitsToFloat(sign or ((exponent + 112) shl 23) or (mantissa shl 13))
+                31 -> java.lang.Float.intBitsToFloat(sign or 0x7F800000 or (mantissa shl 13))
+                else -> java.lang.Float.intBitsToFloat(sign or ((exponent + 112) shl 23) or (mantissa shl 13))
             }
         }
 
