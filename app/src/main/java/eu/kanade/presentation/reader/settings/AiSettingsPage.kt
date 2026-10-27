@@ -115,6 +115,7 @@ internal fun AiSettingsContent(
         IntSlider("Color intensity", prefs.colorizeIntensity, 0..120) { "$it%" }
     }
     CheckboxItem(label = "Upscale pages (Anime4K)", pref = prefs.upscaleEnabled)
+    UpscalerModelsSection(prefs)
 
     CheckboxItem(label = "Shrink big pages before upscaling", pref = prefs.upscaleNormalizeEnabled)
     val normalizeEnabled by prefs.upscaleNormalizeEnabled.collectAsState()
