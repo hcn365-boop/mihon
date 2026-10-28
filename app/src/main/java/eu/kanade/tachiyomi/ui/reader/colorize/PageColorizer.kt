@@ -38,7 +38,6 @@ object PageColorizer {
 
     private const val MODEL_DIR = "colorizer"
     private const val COLORIZER_FILE = "v6_generator.onnx"
-    private const val UPSCALER_FILE = "anime4k_acnet.onnx"
     private const val CHROMA_CACHE_DIR = "colorizer_cache"
     private const val PAGE_CACHE_DIR = "ai_pages"
 
@@ -105,36 +104,11 @@ object PageColorizer {
 
     fun modelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), COLORIZER_FILE)
 
-    /**
-     * كشف ديناميكي لملف نموذج التكبير أو التصفية: يدعم الاسم الافتراضي أو أي ملف .onnx متوفر في المجلد.
-     */
-    fun upscalerModelFile(context: Context): File {
-        val dir = File(context.filesDir, MODEL_DIR)
-        val defaultFile = File(dir, UPSCALER_FILE)
-        if (defaultFile.exists()) return defaultFile
-
-        // البحث التلقائي عن أي ملف ONNX بديل (مثل Restore_L.onnx أو Upscale_Denoise_L.onnx)
-        val alternativeFile = dir.listFiles { _, name ->
-            name.endsWith(".onnx", true) &&
-                name != COLORIZER_FILE &&
-                !name.equals("v6_sam_encoder.onnx", true)
-        }?.firstOrNull()
-
-        if (alternativeFile != null) {
-            logcat(LogPriority.DEBUG) { "Found alternative upscaler/restorer model: ${alternativeFile.name}" }
-            return alternativeFile
-        }
-
-        return defaultFile
-    }
-
     fun samModelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), "v6_sam_encoder.onnx")
 
     private fun samActive(context: Context): Boolean = AiConfig.colorizeUseSam && samModelFile(context).length() > 0
 
     fun isModelInstalled(context: Context): Boolean = modelFile(context).length() > 0
-
-    fun isUpscalerInstalled(context: Context): Boolean = upscalerModelFile(context).length() > 0
 
     /**
      * تفريغ جميع المحركات وإغلاق جلساتها يدوياً عند الخروج أو تغيير الفصول لتنظيف الذاكرة بالكامل.
@@ -184,7 +158,6 @@ object PageColorizer {
         translate: Boolean = true,
     ): BufferedSource? {
         val colorModel = modelFile(context)
-        val upscaleModel = upscalerModelFile(context)
         val intensity = AiConfig.colorizeIntensity
         val wantColor = AiConfig.colorizeEnabled && intensity > 0f && colorModel.length() > 0
         val wantUpscale = AiConfig.upscaleEnabled && upscaleReady(context)
@@ -457,50 +430,25 @@ object PageColorizer {
         }
     }
 
-    private fun useModels() = AiConfig.upscaleEngine == "ANIME4K_ONNX"
-
-    /** The Anime4K model files chosen in the settings, in the order they run (restore first). */
     private fun chosenModelFiles(context: Context): List<File> =
         listOf(AiConfig.upscaleRestoreModel, AiConfig.upscaleMainModel)
             .filter { it.isNotEmpty() }
             .map { Anime4kModels.file(context, it) }
 
-    /** True when the chosen upscaler can run, because its model files are on the phone. */
     private fun upscaleReady(context: Context): Boolean =
-        if (useModels()) {
-            chosenModelFiles(context).let { files -> files.isNotEmpty() && files.all { it.length() > 0 } }
-        } else {
-            upscalerModelFile(context).length() > 0
-        }
+        chosenModelFiles(context).let { files -> files.isNotEmpty() && files.all { it.length() > 0 } }
 
-    /** How many times the chosen upscaler enlarges each side. */
     private fun upscaleScale(): Int =
-        if (useModels()) {
-            Anime4kModels.scaleOf(AiConfig.upscaleRestoreModel) * Anime4kModels.scaleOf(AiConfig.upscaleMainModel)
-        } else {
-            2
-        }
+        Anime4kModels.scaleOf(AiConfig.upscaleRestoreModel) * Anime4kModels.scaleOf(AiConfig.upscaleMainModel)
 
-    private fun upscaleSignature(context: Context): String =
-        if (useModels()) {
-            "m_${AiConfig.upscaleRestoreModel}_${AiConfig.upscaleMainModel}"
-        } else {
-            upscalerModelFile(context).length().toString()
-        }
+    private fun upscaleSignature(): String = "m_${AiConfig.upscaleRestoreModel}_${AiConfig.upscaleMainModel}"
 
     private fun upscalerEngine(context: Context): PageUpscaler? {
+        val files = chosenModelFiles(context)
+        if (files.isEmpty() || files.any { it.length() == 0L }) return null
         val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
-        val setup = "$acceleration/${AiConfig.aiThreads}"
-        if (useModels()) {
-            val files = chosenModelFiles(context)
-            if (files.isEmpty() || files.any { it.length() == 0L }) return null
-            val key = "models_${files.joinToString("|") { "${it.name}_${it.lastModified()}" }}_$setup"
-            return upscalerManager.getOrPut(key) { Anime4kStageUpscaler(files, acceleration, AiConfig.aiThreads) }
-        }
-        val model = upscalerModelFile(context)
-        if (model.length() == 0L) return null
-        val key = "${model.absolutePath}_${setup}_${model.lastModified()}"
-        return upscalerManager.getOrPut(key) { Anime4kUpscaler(model, acceleration, AiConfig.aiThreads) }
+        val key = "models_${files.joinToString("|") { "${it.name}_${it.lastModified()}" }}_${acceleration}_${AiConfig.aiThreads}"
+        return upscalerManager.getOrPut(key) { Anime4kStageUpscaler(files, acceleration, AiConfig.aiThreads) }
     }
 
     // endregion
@@ -540,7 +488,7 @@ object PageColorizer {
         sam: Boolean,
     ): String {
         val color = if (intensity < 0f) "n" else (intensity * 100).roundToInt().toString()
-        val upscaleStamp = if (upscale) "${upscaleSignature(context)}_${AiConfig.upscaleMaxOutputPixels / 1_000_000}" else "n"
+        val upscaleStamp = if (upscale) "${upscaleSignature()}_${AiConfig.upscaleMaxOutputPixels / 1_000_000}" else "n"
         return "${imageHash}_c${color}${if (sam) "s" else ""}_${colorModel.length()}_u${upscaleStamp}_s$shrinkSide"
     }
 
