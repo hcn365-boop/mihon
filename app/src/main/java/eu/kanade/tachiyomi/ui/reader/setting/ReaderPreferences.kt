@@ -187,12 +187,6 @@ class ReaderPreferences(
     val upscaleNormalizeEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_upscale_normalize", false)
 
     val upscaleNormalizeShortSide: Preference<Int> = preferenceStore.getInt("pref_upscale_normalize_side", 1080)
-
-    val upscaleModelUrl: Preference<String> = preferenceStore.getString("pref_upscale_model_url", UPSCALE_MODEL_URL)
-    
-    // "ACNET" is the built-in Anime4K model; "ANIME4K_ONNX" runs the Anime4K models chosen below
-    val upscaleEngine: Preference<String> = preferenceStore.getString("pref_upscale_engine", "ACNET")
-
     // Names (without .onnx) of the Anime4K models; empty means not used
     val upscaleRestoreModel: Preference<String> = preferenceStore.getString("pref_upscale_restore_model", "")
 
