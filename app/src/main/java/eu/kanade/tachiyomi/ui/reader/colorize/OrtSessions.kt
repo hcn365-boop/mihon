@@ -34,8 +34,8 @@ internal object OrtSessions {
     private fun options(threads: Int) = OrtSession.SessionOptions().apply {
         if (threads > 0) setIntraOpNumThreads(threads)
         try {
-            // محاولة تفعيل محرك التسريع المحمول XNNPACK
-            addXnnpack()
+            // تمرير خريطة فارغة لـ addXnnpack لتتوافق مع توقيع الدالة في مكتبة أونكس
+            addXnnpack(emptyMap())
             logcat(LogPriority.DEBUG) { "XNNPACK acceleration was successfully enabled for this session." }
         } catch (e: Throwable) {
             logcat(LogPriority.WARN, e) { "XNNPACK initialization failed, falling back to standard CPU execution." }
