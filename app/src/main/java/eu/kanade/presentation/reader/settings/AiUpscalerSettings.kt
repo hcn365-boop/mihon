@@ -29,9 +29,6 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.presentation.core.util.collectAsState
 import kotlin.coroutines.cancellation.CancellationException
 
-private const val ENGINE_ACNET = "ACNET"
-private const val ENGINE_MODELS = "ANIME4K_ONNX"
-
 /**
  * Which upscaler runs: the built-in ACNet, or the Anime4K models (a restore model first, then an
  * upscale model). A model that is not on the phone yet is downloaded as soon as it is picked.
@@ -40,7 +37,6 @@ private const val ENGINE_MODELS = "ANIME4K_ONNX"
 internal fun UpscalerModelsSection(prefs: AiPrefs) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val engine by prefs.upscaleEngine.collectAsState()
     val restore by prefs.upscaleRestoreModel.collectAsState()
     val main by prefs.upscaleMainModel.collectAsState()
     var status by remember { mutableStateOf("") }
@@ -66,14 +62,6 @@ internal fun UpscalerModelsSection(prefs: AiPrefs) {
             refresh++
         }
     }
-
-    PickRow(
-        label = "Upscaler",
-        current = if (engine == ENGINE_MODELS) "Anime4K models" else "Anime4K ACNet (built in)",
-        items = listOf(ENGINE_ACNET to "Anime4K ACNet (built in)", ENGINE_MODELS to "Anime4K models"),
-        onPick = { prefs.upscaleEngine.set(it) },
-    )
-    if (engine != ENGINE_MODELS) return
 
     // `refresh` is read so the marks below are drawn again after a download.
     val installed = { name: String -> refresh >= 0 && Anime4kModels.isInstalled(context, name) }
