@@ -67,7 +67,9 @@ fun ReaderSettingsDialog(
                     0 -> ReadingModePage(viewModel)
                     1 -> GeneralPage(viewModel)
                     2 -> ColorFilterPage(viewModel)
-                    3 -> AiPage(viewModel)
+                    3 -> ColorizePage(viewModel)
+                    4 -> UpscalePage(viewModel)
+                    5 -> TranslatePage(viewModel)
                 }
             }
         }
