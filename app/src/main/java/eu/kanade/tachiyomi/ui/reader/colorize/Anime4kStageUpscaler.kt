@@ -226,8 +226,8 @@ class Anime4kStageUpscaler(files: List<File>, acceleration: Acceleration, thread
     }
 
     companion object {
-        private const val TILE = 192
-        private const val PAD = 16
+        private const val TILE = 256
+        private const val PAD = 32
         private const val CORE = TILE - 2 * PAD
         private const val PROBE = 32
 
