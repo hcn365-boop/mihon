@@ -21,10 +21,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import eu.kanade.tachiyomi.ui.reader.colorize.AiPrefs
 import eu.kanade.tachiyomi.ui.reader.colorize.ColorizerModelInstaller
 import eu.kanade.tachiyomi.ui.reader.colorize.ModelKind
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderSettingsViewModel
-import eu.kanade.tachiyomi.ui.reader.colorize.AiPrefs
 import eu.kanade.translation.MangaTranslationContext
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.preference.Preference
@@ -33,14 +34,32 @@ import tachiyomi.presentation.core.components.SliderItem
 import tachiyomi.presentation.core.util.collectAsState
 import kotlin.coroutines.cancellation.CancellationException
 
-/** AI tab of the reader settings. Texts are plain strings for now. */
+// region Pages of the reader settings (one tab each)
+
 @Composable
-internal fun ColumnScope.AiPage(viewModel: ReaderSettingsViewModel) {
-    val base = viewModel.preferences
+internal fun ColumnScope.ColorizePage(viewModel: ReaderSettingsViewModel) {
+    ColorizeSettings(MangaScope(viewModel.preferences))
+}
+
+@Composable
+internal fun ColumnScope.UpscalePage(viewModel: ReaderSettingsViewModel) {
+    UpscaleSettings(MangaScope(viewModel.preferences))
+}
+
+@Composable
+internal fun ColumnScope.TranslatePage(viewModel: ReaderSettingsViewModel) {
+    TranslationSection(MangaScope(viewModel.preferences), inReader = true)
+}
+
+/**
+ * The "separate settings for this manga" box, shown at the top of each AI tab of the reader.
+ * @return the settings to show: the manga's own when the box is checked, the general ones otherwise
+ */
+@Composable
+internal fun MangaScope(base: ReaderPreferences): AiPrefs {
     val mangaId = MangaTranslationContext.mangaId
     val ownPref = remember(mangaId) { if (mangaId >= 0) base.mangaOverride(mangaId) else null }
     val ownOn = ownPref?.collectAsState()?.value == true
-    // The settings shown below are the manga's own when the box is checked, the general ones otherwise.
     val prefs = remember(mangaId, ownOn) { AiPrefs(base, if (ownOn) mangaId else null) }
 
     if (ownPref != null) {
@@ -54,30 +73,26 @@ internal fun ColumnScope.AiPage(viewModel: ReaderSettingsViewModel) {
             },
         )
     }
-
-    AiSettingsContent(prefs, inReader = true)
+    return prefs
 }
 
-/** The AI settings, shared by the reader tab and by the app's settings screen. */
+// endregion
+
+// region Settings, shared by the reader tabs and the app's settings screen
+
 @Composable
-internal fun AiSettingsContent(
-    prefs: AiPrefs,
-    inReader: Boolean = false,
-) {
+internal fun ColorizeSettings(prefs: AiPrefs) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val enabled by prefs.colorizeEnabled.collectAsState()
     var status by remember { mutableStateOf("") }
     var colorizerInstalled by remember { mutableStateOf(ColorizerModelInstaller.isInstalled(context)) }
-    var upscalerInstalled by remember {
-        mutableStateOf(ColorizerModelInstaller.isInstalled(context, ModelKind.UPSCALER))
-    }
-    var samInstalled by remember { mutableStateOf(ColorizerModelInstaller.isInstalled(context, ModelKind.COLORIZER_SAM)) }
+    var samInstalled by remember { mutableStateOf(ColorizerModelInstaller.isInstalled(context, ModelKind.COLORIZER_SAM)) } // SAM
     var importKind by remember { mutableStateOf(ModelKind.COLORIZER) }
 
     fun refresh() {
         colorizerInstalled = ColorizerModelInstaller.isInstalled(context)
-        upscalerInstalled = ColorizerModelInstaller.isInstalled(context, ModelKind.UPSCALER)
-        samInstalled = ColorizerModelInstaller.isInstalled(context, ModelKind.COLORIZER_SAM)
+        samInstalled = ColorizerModelInstaller.isInstalled(context, ModelKind.COLORIZER_SAM) // SAM
     }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -93,8 +108,7 @@ internal fun AiSettingsContent(
         if (status.isNotEmpty()) return
         val url = when (kind) {
             ModelKind.COLORIZER -> prefs.colorizeModelUrl.get()
-            ModelKind.UPSCALER -> prefs.upscaleModelUrl.get()
-            ModelKind.COLORIZER_SAM -> prefs.colorizeSamModelUrl.get()
+            ModelKind.COLORIZER_SAM -> prefs.colorizeSamModelUrl.get() // SAM
         }
         scope.launch {
             runInstall(context, { status = it }) {
@@ -106,28 +120,11 @@ internal fun AiSettingsContent(
         }
     }
 
-    // region Features
-
-    val colorizeEnabled by prefs.colorizeEnabled.collectAsState()
     CheckboxItem(label = "Colorize pages (Manga Light V6)", pref = prefs.colorizeEnabled)
-    CheckboxItem(label = "Use the SAM encoder guide (needs the SAM encoder file)", pref = prefs.colorizeUseSam)
-    if (colorizeEnabled) {
+    if (enabled) {
         IntSlider("Color intensity", prefs.colorizeIntensity, 0..120) { "$it%" }
     }
-    CheckboxItem(label = "Upscale pages (Anime4K)", pref = prefs.upscaleEnabled)
-    UpscalerModelsSection(prefs)
-
-    CheckboxItem(label = "Shrink big pages before upscaling", pref = prefs.upscaleNormalizeEnabled)
-    val normalizeEnabled by prefs.upscaleNormalizeEnabled.collectAsState()
-    if (normalizeEnabled) {
-        IntSlider("Shrink to short side", prefs.upscaleNormalizeShortSide, 600..1600) { "$it px" }
-    }
-    
-    TranslationSection(prefs, inReader)
-
-    // endregion
-
-    // region Models
+    CheckboxItem(label = "Use the SAM encoder guide (needs the SAM encoder file)", pref = prefs.colorizeUseSam) // SAM
 
     ModelRow(
         title = "Colorizer model",
@@ -140,55 +137,48 @@ internal fun AiSettingsContent(
         },
     )
     UrlField("Colorizer model link", prefs.colorizeModelUrl)
-    ModelRow(
-        title = "Upscaler model",
-        installed = upscalerInstalled,
-        status = status,
-        onDownload = { download(ModelKind.UPSCALER) },
-        onImport = {
-            importKind = ModelKind.UPSCALER
-            importLauncher.launch(arrayOf("*/*"))
-        },
-    )
-    UrlField("Upscaler model link", prefs.upscaleModelUrl)
-    ModelRow(
-        title = "SAM encoder (optional)",
-        installed = samInstalled,
-        status = status,
-        onDownload = { download(ModelKind.COLORIZER_SAM) },
-        onImport = {
-            importKind = ModelKind.COLORIZER_SAM
-            importLauncher.launch(arrayOf("*/*"))
-        },
-    )
-    UrlField("SAM encoder link", prefs.colorizeSamModelUrl)
-
-    // endregion
-
-    AccelerationSection(prefs)
-
-    // region Limits
+    ModelRow( // SAM
+        title = "SAM encoder (optional)", // SAM
+        installed = samInstalled, // SAM
+        status = status, // SAM
+        onDownload = { download(ModelKind.COLORIZER_SAM) }, // SAM
+        onImport = { // SAM
+            importKind = ModelKind.COLORIZER_SAM // SAM
+            importLauncher.launch(arrayOf("*/*")) // SAM
+        }, // SAM
+    ) // SAM
+    UrlField("SAM encoder link", prefs.colorizeSamModelUrl) // SAM
 
     IntSlider("Colorize: largest page", prefs.colorizeMaxMegapixels, 1..40) { "$it MP" }
+    IntSlider("Pages colorized ahead", prefs.colorizePreloadCount, 0..10) { "$it" }
+}
+
+@Composable
+internal fun UpscaleSettings(prefs: AiPrefs) {
+    val normalize by prefs.upscaleNormalizeEnabled.collectAsState()
+
+    CheckboxItem(label = "Upscale pages (Anime4K models)", pref = prefs.upscaleEnabled)
+    UpscalerModelsSection(prefs)
+
+    CheckboxItem(label = "Shrink big pages before upscaling", pref = prefs.upscaleNormalizeEnabled)
+    if (normalize) {
+        IntSlider("Shrink to short side", prefs.upscaleNormalizeShortSide, 600..1600) { "$it px" }
+    }
     IntSlider("Upscale: largest page", prefs.upscaleMaxMegapixels, 1..12) { "$it MP" }
+    IntSlider("Upscale: largest result", prefs.upscaleMaxOutputMegapixels, 2..40) { "$it MP" }
+    IntSlider("Pages upscaled ahead", prefs.upscalePreloadCount, 0..10) { "$it" }
+}
+
+/** Settings of the phone, not of a manga: memory, cache, threads and hardware. Shown in the app settings. */
+@Composable
+internal fun PerformanceSettings(prefs: AiPrefs) {
+    AccelerationSection(prefs)
     ScaledSlider("Memory allowed per page (estimate)", prefs.aiMemoryBudgetMb, 128, 2..48)
     ScaledSlider("Processed pages cache", prefs.aiCacheSizeMb, 256, 1..32)
-
-    // endregion
-
-    // region Preload
-
     IntSlider("Pages downloaded ahead", prefs.pagePreloadCount, 1..16) { "$it" }
-    IntSlider("Pages colorized ahead", prefs.colorizePreloadCount, 0..10) { "$it" }
-    IntSlider("Pages upscaled ahead", prefs.upscalePreloadCount, 0..10) { "$it" }
-    Text(
-        text = "Colorized and upscaled counts are used by the background preload, which is added separately.",
-        style = MaterialTheme.typography.bodySmall,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-    )
-
-    // endregion
 }
+
+// endregion
 
 @Composable
 private fun IntSlider(label: String, pref: Preference<Int>, range: IntRange, text: (Int) -> String) {
@@ -206,11 +196,12 @@ private fun IntSlider(label: String, pref: Preference<Int>, range: IntRange, tex
 @Composable
 private fun ScaledSlider(label: String, pref: Preference<Int>, unit: Int, range: IntRange) {
     val value by pref.collectAsState()
+    val steps = (value / unit).coerceIn(range)
     SliderItem(
         label = label,
-        value = (value / unit).coerceIn(range),
+        value = steps,
         valueRange = range,
-        valueString = "${(value / unit).coerceIn(range) * unit} MB",
+        valueString = "${steps * unit} MB",
         onChange = { pref.set(it * unit) },
     )
 }
