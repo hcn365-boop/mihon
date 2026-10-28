@@ -418,8 +418,6 @@ class ReaderPreferences(
         const val COLORIZE_MODEL_URL = "https://huggingface.co/sharky172/manga-light-colorizer/resolve/" +
             "2fb022c4ce55632b7671a1df306f63984928e36a/models/v6_generator.onnx"
 
-        const val UPSCALE_MODEL_URL = "https://github.com/cliecy/CManga/raw/main/assets/models/anime4k_acnet.onnx"
-
         const val UPSCALE_MODELS_BASE_URL = "https://github.com/kato-megumi/anime4kOnnx/raw/master/anime4kOnnx"
 
         const val COLORIZE_SAM_MODEL_URL =
