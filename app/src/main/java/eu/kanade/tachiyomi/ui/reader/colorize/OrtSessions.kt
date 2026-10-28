@@ -4,6 +4,7 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
+import java.io.File
 
 /**
  * Where an ONNX model runs. NNAPI lets Android hand the work to the phone's GPU, NPU or DSP when the
@@ -34,7 +35,18 @@ internal object OrtSessions {
                     logcat(LogPriority.DEBUG) { "Successfully created ONNX session with NNAPI acceleration." }
                 }
             } catch (e: Throwable) {
-                // تسجيل الخطأ بتفاصيل كاملة (الرسالة والسبب) ومستوى ERROR لسهولة التتبع في Logcat
+                // حفظ الخطأ في ملف نصي بجانب مسار النموذج لتتمكن من قراءته مباشرة من هاتفكت
+                try {
+                    val modelFile = File(path)
+                    val errorFile = File(modelFile.parentFile, "nnapi_error.txt")
+                    errorFile.appendText("--- Time: ${System.currentTimeMillis()} ---\n")
+                    errorFile.appendText("Model: ${modelFile.name}\n")
+                    errorFile.appendText("Error Message: ${e.message}\n")
+                    errorFile.appendText("Cause: ${e.cause}\n")
+                    errorFile.appendText("Stacktrace:\n${e.stackTraceToString()}\n\n")
+                } catch (_: Exception) {}
+
+                // تسجيل الخطأ بتفاصيل كاملة ومستوى ERROR للتتبع الداخلي
                 logcat(LogPriority.ERROR, e) { 
                     "NNAPI acceleration failed for model: $path. " +
                     "Error message: ${e.message}, " +
