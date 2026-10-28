@@ -6,8 +6,8 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 
 /**
- * Where an ONNX model runs. XNNPACK optimizes execution for mobile processors,
- * providing high performance on CPU/mobile architectures.
+ * Where an ONNX model runs.
+ * Supports standard CPU execution with optional XNNPACK / NNAPI fallbacks.
  */
 enum class Acceleration {
     CPU,
@@ -24,21 +24,30 @@ internal object OrtSessions {
 
     /**
      * @param threads CPU threads for the parts that run on the CPU; 0 lets ONNX Runtime decide
-     * @return a session optimized with XNNPACK and thread configurations.
+     * @return a session using standard execution or optimized XNNPACK without breaking model validation.
      */
     fun create(env: OrtEnvironment, path: String, acceleration: Acceleration, threads: Int): OrtSession {
-        logcat(LogPriority.DEBUG) { "Preparing to create ONNX session for model: $path with threads: $threads" }
+        // 1. محاولة إنشاء الجلسة باستخدام XNNPACK أولاً لأقصى أداء
+        try {
+            logcat(LogPriority.DEBUG) { "Attempting to create ONNX session with XNNPACK for model: $path" }
+            val options = options(threads).apply {
+                try {
+                    addXnnpack(emptyMap())
+                } catch (_: Throwable) {}
+            }
+            return env.createSession(path, options).also {
+                logcat(LogPriority.DEBUG) { "Successfully created ONNX session with XNNPACK." }
+            }
+        } catch (e: Throwable) {
+            logcat(LogPriority.WARN, e) { "XNNPACK session creation failed for model: $path. Falling back to standard CPU." }
+        }
+
+        // 2. التراجع الآمن إلى CPU القياسي (وهذا ما يضمن نجاح فحص النماذج والتشغيل المستقر)
+        logcat(LogPriority.DEBUG) { "Creating standard CPU ONNX session (threads: $threads) for model: $path" }
         return env.createSession(path, options(threads))
     }
 
     private fun options(threads: Int) = OrtSession.SessionOptions().apply {
         if (threads > 0) setIntraOpNumThreads(threads)
-        try {
-            // تمرير خريطة فارغة لـ addXnnpack لتتوافق مع توقيع الدالة في مكتبة أونكس
-            addXnnpack(emptyMap())
-            logcat(LogPriority.DEBUG) { "XNNPACK acceleration was successfully enabled for this session." }
-        } catch (e: Throwable) {
-            logcat(LogPriority.WARN, e) { "XNNPACK initialization failed, falling back to standard CPU execution." }
-        }
     }
 }
