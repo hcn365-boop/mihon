@@ -30,7 +30,9 @@ fun ReaderSettingsDialog(
         stringResource(MR.strings.pref_category_reading_mode),
         stringResource(MR.strings.pref_category_general),
         stringResource(MR.strings.custom_filter),
-        "AI",  
+        "Colorize",
+        "Upscale",
+        "Translate",
     )
     val pagerState = rememberPagerState { tabTitles.size }
 
