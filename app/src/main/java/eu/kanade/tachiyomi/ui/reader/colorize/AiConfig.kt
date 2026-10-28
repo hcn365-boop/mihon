@@ -55,7 +55,6 @@ object AiConfig {
     @Volatile var colorizeIntensity = 1f
 
     @Volatile var upscaleEnabled = false
-    @Volatile var upscaleEngine = "ACNET"
     @Volatile var upscaleRestoreModel = ""
     @Volatile var upscaleMainModel = "Upscale_L"
 
@@ -169,7 +168,6 @@ object AiConfig {
         bind(p.colorizeUseSam, true) { colorizeUseSam = it }
         bind(p.colorizeIntensity, true) { colorizeIntensity = it / 100f }
         bind(p.upscaleEnabled, true) { upscaleEnabled = it }
-        bind(p.upscaleEngine, true) { upscaleEngine = it }
         bind(p.upscaleRestoreModel, true) { upscaleRestoreModel = it }
         bind(p.upscaleMainModel, true) { upscaleMainModel = it }
         bind(p.colorizeMaxMegapixels, true) { colorizeMaxPixels = it * 1_000_000L }
