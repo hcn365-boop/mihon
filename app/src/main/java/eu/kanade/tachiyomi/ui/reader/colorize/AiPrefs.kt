@@ -84,8 +84,8 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         translateEnabled, translateFrom, translateTo, translationEngine, translationOcrMode, translationFont,
         translatePreloadCount, translateAutoLanguage, translateAutoFromTitle, translateAutoFromSource,
         translateConfirmLanguage, translationModel, translationApiKey, translationTemperature,
-        translationMaxTokens, translationServerUrl, translationPagesPerRequest, translationMaxChars,
-        translationMaxWaitSeconds, translateCollisionPadding, translateFilterWordsEnabled,
+        translationMaxTokens, translationServerUrl, translatePagesPerRequest, translateMaxChars,
+        translateMaxWaitSeconds, translateCollisionPadding, translateFilterWordsEnabled,
         translateFilterWords, translateLatinFilterEnabled, translateLatinMinLetters,
         translateSkipSameLanguage,
     )
