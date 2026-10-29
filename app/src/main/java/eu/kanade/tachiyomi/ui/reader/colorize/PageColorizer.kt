@@ -38,6 +38,7 @@ object PageColorizer {
 
     private const val MODEL_DIR = "colorizer"
     private const val COLORIZER_FILE = "v6_generator.onnx"
+    private const val UPSCALER_FILE = "anime4k_acnet.onnx"
     private const val CHROMA_CACHE_DIR = "colorizer_cache"
     private const val PAGE_CACHE_DIR = "ai_pages"
 
@@ -101,14 +102,19 @@ object PageColorizer {
 
     private val colorizerManager = EngineManager<MangaColorizer>(maxEntries = 1)
     private val upscalerManager = EngineManager<PageUpscaler>(maxEntries = 1)
+    private val acnetManager = EngineManager<Anime4kUpscaler>(maxEntries = 1)
 
     fun modelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), COLORIZER_FILE)
 
     fun samModelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), "v6_sam_encoder.onnx")
 
+    fun upscalerModelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), UPSCALER_FILE)
+
     private fun samActive(context: Context): Boolean = AiConfig.colorizeUseSam && samModelFile(context).length() > 0
 
     fun isModelInstalled(context: Context): Boolean = modelFile(context).length() > 0
+
+    private fun acnetReady(context: Context): Boolean = upscalerModelFile(context).length() > 0
 
     /**
      * تفريغ جميع المحركات وإغلاق جلساتها يدوياً عند الخروج أو تغيير الفصول لتنظيف الذاكرة بالكامل.
@@ -117,6 +123,7 @@ object PageColorizer {
     fun releaseEngines() {
         colorizerManager.reset()
         upscalerManager.reset()
+        acnetManager.reset()
     }
 
     /** Kept for the existing callers: the intensity now comes from [AiConfig]. */
@@ -161,9 +168,10 @@ object PageColorizer {
         val intensity = AiConfig.colorizeIntensity
         val wantColor = AiConfig.colorizeEnabled && intensity > 0f && colorModel.length() > 0
         val wantUpscale = AiConfig.upscaleEnabled && upscaleReady(context)
+        val wantFinal = AiConfig.upscaleFinalPassEnabled && acnetReady(context)
         val translation = if (translate) AiConfig.translation else null
         val wantShrink = AiConfig.normalizeSide > 0
-        if (!wantColor && !wantUpscale && !wantShrink && translation == null) return null
+        if (!wantColor && !wantUpscale && !wantShrink && !wantFinal && translation == null) return null
         if (ImageUtil.isAnimatedAndSupported(source)) return null
 
         val bytes = source.peek().readByteArray()
@@ -184,7 +192,7 @@ object PageColorizer {
         val doUpscale = wantUpscale && upscaleInputPixels <= AiConfig.upscaleMaxPixels
         val doShrink = normalize in 1 until shortSide
         val translationConfig = translation?.takeIf { pixels <= AiConfig.colorizeMaxPixels }
-        if (!doColor && !doUpscale && !doShrink && translationConfig == null) return null
+        if (!doColor && !doUpscale && !doShrink && !wantFinal && translationConfig == null) return null
 
         val imageHash = hash(bytes)
         val shrinkSide = if (doShrink) normalize else 0
@@ -202,8 +210,8 @@ object PageColorizer {
         // A page finished before is read straight from disk.
         if (display && finalName != null) readCachedPage(cacheFile(context, finalName))?.let { return it }
 
-        val base = if (doColor || doUpscale || doShrink) {
-            baseImage(context, bytes, imageHash, baseName, doColor, doUpscale, shrinkSide, intensity, pixels)
+        val base = if (doColor || doUpscale || doShrink || wantFinal) {
+            baseImage(context, bytes, imageHash, baseName, doColor, doUpscale, shrinkSide, intensity, pixels, wantFinal)
         } else {
             null
         }
@@ -227,6 +235,38 @@ object PageColorizer {
             ?: base?.let { Buffer().write(it) }
     }
 
+    /** A page bigger than the allowed output size is scaled down: the viewer needs a full buffer per page. */
+    private fun capSize(bitmap: Bitmap): Bitmap {
+        val outputPixels = bitmap.width.toLong() * bitmap.height
+        if (outputPixels <= AiConfig.upscaleMaxOutputPixels) return bitmap
+        val ratio = sqrt(AiConfig.upscaleMaxOutputPixels.toDouble() / outputPixels)
+        val smaller = Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width * ratio).roundToInt().coerceAtLeast(1),
+            (bitmap.height * ratio).roundToInt().coerceAtLeast(1),
+            true,
+        )
+        if (smaller !== bitmap) bitmap.recycle()
+        return smaller
+    }
+
+    /** The last step: the built-in ACNet model refines the page. Not run when the page or memory is too big. */
+    private fun acnetFinalPass(context: Context, page: Bitmap): Bitmap {
+        val pixels = page.width.toLong() * page.height
+        if (pixels > AiConfig.upscaleFinalPassMaxPixels) return page
+        if (pixels * (14 + 4 * 21) > AiConfig.memoryBudgetBytes) return page
+        val model = upscalerModelFile(context)
+        val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
+        val key = "${model.absolutePath}_${acceleration}_${AiConfig.aiThreads}_${model.lastModified()}"
+        val engine = acnetManager.getOrPut(key) { Anime4kUpscaler(model, acceleration, AiConfig.aiThreads) }
+        val enlarged = engine.upscale(page)
+        if (!AiConfig.upscaleFinalPassKeepSize) return capSize(enlarged)
+        // Back to the size before this step: lines come out sharper and the page does not grow.
+        val restored = Bitmap.createScaledBitmap(enlarged, page.width, page.height, true)
+        if (restored !== enlarged) enlarged.recycle()
+        return restored
+    }
+
     private suspend fun baseImage(
         context: Context,
         bytes: ByteArray,
@@ -237,6 +277,7 @@ object PageColorizer {
         shrinkSide: Int,
         intensity: Float,
         pixels: Long,
+        wantFinal: Boolean,
     ): ByteArray? {
         val file = cacheFile(context, baseName)
         if (file.isFile && file.length() > 0L) {
@@ -252,8 +293,9 @@ object PageColorizer {
             var color = doColor
             // The upscaler output is opaque, so pages with transparency are not upscaled.
             val upscale = doUpscale && !original.hasAlpha()
+            val finalPass = wantFinal && acnetReady(context) && !original.hasAlpha()
             if (color && !looksGrayscale(working)) color = false
-            if (!color && !upscale && working === original) return null
+            if (!color && !upscale && !finalPass && working === original) return null
             if (estimateBytes(pixels, color, upscale, upscaleScale()) > AiConfig.memoryBudgetBytes) return null
 
             // One page at a time: keeps peak memory low and protects the ONNX sessions.
@@ -272,20 +314,12 @@ object PageColorizer {
                     if (upscale) {
                         var enlarged = (upscalerEngine(context) ?: error("No upscaler model")).process(page)
                         if (page !== working) page.recycle()
-                        // A result that is too big is scaled down: the viewer needs a full buffer per page.
-                        val outputPixels = enlarged.width.toLong() * enlarged.height
-                        if (outputPixels > AiConfig.upscaleMaxOutputPixels) {
-                            val ratio = sqrt(AiConfig.upscaleMaxOutputPixels.toDouble() / outputPixels)
-                            val smaller = Bitmap.createScaledBitmap(
-                                enlarged,
-                                (enlarged.width * ratio).roundToInt().coerceAtLeast(1),
-                                (enlarged.height * ratio).roundToInt().coerceAtLeast(1),
-                                true,
-                            )
-                            if (smaller !== enlarged) enlarged.recycle()
-                            enlarged = smaller
-                        }
-                        page = enlarged
+                        page = capSize(enlarged)
+                    }
+                    if (finalPass) {
+                        val refined = acnetFinalPass(context, page)
+                        if (refined !== page && page !== working) page.recycle()
+                        page = refined
                     }
                     page
                 }
@@ -489,7 +523,8 @@ object PageColorizer {
     ): String {
         val color = if (intensity < 0f) "n" else (intensity * 100).roundToInt().toString()
         val upscaleStamp = if (upscale) "${upscaleSignature()}_${AiConfig.upscaleMaxOutputPixels / 1_000_000}" else "n"
-        return "${imageHash}_c${color}${if (sam) "s" else ""}_${colorModel.length()}_u${upscaleStamp}_s$shrinkSide"
+        val finalPassStamp = "_f${if (AiConfig.upscaleFinalPassEnabled) "1" else "0"}${if (AiConfig.upscaleFinalPassKeepSize) "k" else "g"}${AiConfig.upscaleFinalPassMaxPixels / 1_000_000}"
+        return "${imageHash}_c${color}${if (sam) "s" else ""}_${colorModel.length()}_u${upscaleStamp}_s$shrinkSide$finalPassStamp"
     }
 
     private fun cacheFile(context: Context, name: String): File = File(File(context.cacheDir, PAGE_CACHE_DIR), name)
