@@ -114,7 +114,7 @@ object PageColorizer {
 
     fun isModelInstalled(context: Context): Boolean = modelFile(context).length() > 0
 
-    private fun acnetReady(context: Context): Boolean = upscalerModelFile(context).length() > 0
+    private fun acnetReady(context: Context): Boolean = true // أصبح النموذج ثابتاً ومدمجاً في الـ Assets
 
     /**
      * تفريغ جميع المحركات وإغلاق جلساتها يدوياً عند الخروج أو تغيير الفصول لتنظيف الذاكرة بالكامل.
@@ -255,10 +255,12 @@ object PageColorizer {
         val pixels = page.width.toLong() * page.height
         if (pixels > AiConfig.upscaleFinalPassMaxPixels) return page
         if (pixels * (14 + 4 * 21) > AiConfig.memoryBudgetBytes) return page
-        val model = upscalerModelFile(context)
         val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
-        val key = "${model.absolutePath}_${acceleration}_${AiConfig.aiThreads}_${model.lastModified()}"
-        val engine = acnetManager.getOrPut(key) { Anime4kUpscaler(model, acceleration, AiConfig.aiThreads) }
+        val key = "${acceleration}_${AiConfig.aiThreads}"
+        
+        // تم تمرير الـ Context مباشرة بدلاً من الـ File ليتوافق مع المسار الثابت داخل الـ Assets
+        val engine = acnetManager.getOrPut(key) { Anime4kUpscaler(context, acceleration, AiConfig.aiThreads) }
+        
         val enlarged = engine.upscale(page)
         if (!AiConfig.upscaleFinalPassKeepSize) return capSize(enlarged)
         // Back to the size before this step: lines come out sharper and the page does not grow.
