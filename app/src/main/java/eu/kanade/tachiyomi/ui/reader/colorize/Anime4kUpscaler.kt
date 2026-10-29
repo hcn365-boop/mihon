@@ -4,6 +4,7 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import ai.onnxruntime.TensorInfo
+import android.content.Context
 import android.graphics.Bitmap
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
@@ -27,7 +28,11 @@ import kotlin.math.roundToInt
  * The page is processed in overlapping tiles, so memory stays small whatever the page size.
  * The result is opaque (alpha is not preserved). Not thread safe: use it from one coroutine at a time.
  */
-class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration.CPU, threads: Int = 0) : PageUpscaler {
+class Anime4kUpscaler(
+    context: Context,
+    acceleration: Acceleration = Acceleration.CPU,
+    threads: Int = 0
+) : PageUpscaler {
     
     private class Spec(val inputName: String, val tileWidth: Int, val tileHeight: Int, val scale: Int)
 
@@ -43,6 +48,20 @@ class Anime4kUpscaler(modelFile: File, acceleration: Acceleration = Acceleration
 
     init {
         check(OpenCVLoader.initLocal()) { "OpenCV native library failed to load" }
+        
+        // المسار الثابت للموديل داخل مجلد الـ assets
+        val assetPath = "anime4k/anime4k_acnet.onnx"
+        val modelFile = File(context.cacheDir, "anime4k_acnet.onnx")
+        
+        // نسخ الموديل إلى ذاكرة المؤقتة (Cache) إن لم يكن موجوداً لكي تقرأه مكتبة ONNX
+        if (!modelFile.exists()) {
+            context.assets.open(assetPath).use { input ->
+                modelFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+
         session = OrtSessions.create(env, modelFile.absolutePath, acceleration, threads)
         spec = try {
             inspect(session)
