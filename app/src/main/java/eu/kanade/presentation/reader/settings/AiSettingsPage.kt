@@ -109,7 +109,6 @@ internal fun ColorizeSettings(prefs: AiPrefs) {
         val url = when (kind) {
             ModelKind.COLORIZER -> prefs.colorizeModelUrl.get()
             ModelKind.COLORIZER_SAM -> prefs.colorizeSamModelUrl.get() // SAM
-            ModelKind.UPSCALER -> prefs.upscaleModelUrl.get()
         }
         scope.launch {
             runInstall(context, { status = it }) {
@@ -156,21 +155,8 @@ internal fun ColorizeSettings(prefs: AiPrefs) {
 
 @Composable
 internal fun UpscaleSettings(prefs: AiPrefs) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val normalize by prefs.upscaleNormalizeEnabled.collectAsState()
     val finalPass by prefs.upscaleFinalPassEnabled.collectAsState()
-    var status by remember { mutableStateOf("") }
-    var acnetInstalled by remember { mutableStateOf(ColorizerModelInstaller.isInstalled(context, ModelKind.UPSCALER)) }
-
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            scope.launch {
-                runInstall(context, { status = it }) { ColorizerModelInstaller.importModel(context, ModelKind.UPSCALER, uri) }
-                acnetInstalled = ColorizerModelInstaller.isInstalled(context, ModelKind.UPSCALER)
-            }
-        }
-    }
 
     CheckboxItem(label = "Upscale pages", pref = prefs.upscaleEnabled)
     Text(
@@ -190,25 +176,6 @@ internal fun UpscaleSettings(prefs: AiPrefs) {
     if (finalPass) {
         CheckboxItem(label = "Keep the page size after the final pass", pref = prefs.upscaleFinalPassKeepSize)
         IntSlider("Final pass: largest page", prefs.upscaleFinalPassMaxMegapixels, 1..12) { "$it MP" }
-        ModelRow(
-            title = "ACNet model",
-            installed = acnetInstalled,
-            status = status,
-            onDownload = {
-                if (status.isEmpty()) {
-                    scope.launch {
-                        runInstall(context, { status = it }) {
-                            ColorizerModelInstaller.downloadModel(context, ModelKind.UPSCALER, prefs.upscaleModelUrl.get()) { progress ->
-                                status = "Downloading ${(progress * 100).toInt()}%"
-                            }
-                        }
-                        acnetInstalled = ColorizerModelInstaller.isInstalled(context, ModelKind.UPSCALER)
-                    }
-                }
-            },
-            onImport = { importLauncher.launch(arrayOf("*/*")) },
-        )
-        UrlField("ACNet model link", prefs.upscaleModelUrl)
     }
 
     IntSlider("Upscale: largest page", prefs.upscaleMaxMegapixels, 1..12) { "$it MP" }
