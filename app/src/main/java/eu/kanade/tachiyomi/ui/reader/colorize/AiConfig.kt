@@ -57,6 +57,9 @@ object AiConfig {
     @Volatile var upscaleEnabled = false
     @Volatile var upscaleRestoreModel = ""
     @Volatile var upscaleMainModel = "Upscale_L"
+    @Volatile var upscaleFinalPassEnabled = false
+    @Volatile var upscaleFinalPassKeepSize = true
+    @Volatile var upscaleFinalPassMaxPixels = 4_000_000L
 
     @Volatile var colorizeMaxPixels = 12_000_000L
 
@@ -101,7 +104,7 @@ object AiConfig {
     
 
     val anyEnabled: Boolean
-        get() = colorizeEnabled || upscaleEnabled || upscaleNormalizeEnabled || translation != null
+        get() = colorizeEnabled || upscaleEnabled || upscaleNormalizeEnabled || upscaleFinalPassEnabled || translation != null
 
     private var prefsRef: ReaderPreferences? = null
     private var viewerScope: CoroutineScope? = null
@@ -170,6 +173,9 @@ object AiConfig {
         bind(p.upscaleEnabled, true) { upscaleEnabled = it }
         bind(p.upscaleRestoreModel, true) { upscaleRestoreModel = it }
         bind(p.upscaleMainModel, true) { upscaleMainModel = it }
+        bind(p.upscaleFinalPassEnabled, true) { upscaleFinalPassEnabled = it }
+        bind(p.upscaleFinalPassKeepSize, true) { upscaleFinalPassKeepSize = it }
+        bind(p.upscaleFinalPassMaxMegapixels, true) { upscaleFinalPassMaxPixels = it * 1_000_000L }
         bind(p.colorizeMaxMegapixels, true) { colorizeMaxPixels = it * 1_000_000L }
         bind(p.upscaleMaxMegapixels, true) { upscaleMaxPixels = it * 1_000_000L }
         bind(p.upscaleMaxOutputMegapixels, true) { upscaleMaxOutputPixels = it * 1_000_000L }
