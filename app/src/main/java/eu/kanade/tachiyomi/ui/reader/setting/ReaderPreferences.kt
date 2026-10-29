@@ -207,7 +207,12 @@ class ReaderPreferences(
     val colorizePreloadCount: Preference<Int> = preferenceStore.getInt("pref_colorize_preload", 3)
 
     val upscalePreloadCount: Preference<Int> = preferenceStore.getInt("pref_upscale_preload", 2)
-    
+
+    val upscaleFinalPassEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_upscale_final_pass", false)
+
+    val upscaleFinalPassKeepSize: Preference<Boolean> = preferenceStore.getBoolean("pref_upscale_final_keep_size", true)
+
+    val upscaleFinalPassMaxMegapixels: Preference<Int> = preferenceStore.getInt("pref_upscale_final_max_mp", 4)
     // endregion
 
     // region Translation
