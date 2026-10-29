@@ -31,6 +31,9 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
     val upscaleNormalizeEnabled: Preference<Boolean> = own(base.upscaleNormalizeEnabled)
     val upscaleNormalizeShortSide: Preference<Int> = own(base.upscaleNormalizeShortSide)
     val upscalePreloadCount: Preference<Int> = own(base.upscalePreloadCount)
+    val upscaleFinalPassEnabled: Preference<Boolean> = own(base.upscaleFinalPassEnabled)
+    val upscaleFinalPassKeepSize: Preference<Boolean> = own(base.upscaleFinalPassKeepSize)
+    val upscaleFinalPassMaxMegapixels: Preference<Int> = own(base.upscaleFinalPassMaxMegapixels)
 
     val translateEnabled: Preference<Boolean> = own(base.translateEnabled)
     val translateFrom: Preference<String> = own(base.translateFrom)
@@ -81,8 +84,8 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         translateEnabled, translateFrom, translateTo, translationEngine, translationOcrMode, translationFont,
         translatePreloadCount, translateAutoLanguage, translateAutoFromTitle, translateAutoFromSource,
         translateConfirmLanguage, translationModel, translationApiKey, translationTemperature,
-        translationMaxTokens, translationServerUrl, translatePagesPerRequest, translateMaxChars,
-        translateMaxWaitSeconds, translateCollisionPadding, translateFilterWordsEnabled,
+        translationMaxTokens, translationServerUrl, translationPagesPerRequest, translationMaxChars,
+        translationMaxWaitSeconds, translateCollisionPadding, translateFilterWordsEnabled,
         translateFilterWords, translateLatinFilterEnabled, translateLatinMinLetters,
         translateSkipSameLanguage,
     )
@@ -103,6 +106,9 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         reset(upscaleNormalizeEnabled)
         reset(upscaleNormalizeShortSide)
         reset(upscalePreloadCount)
+        reset(upscaleFinalPassEnabled)
+        reset(upscaleFinalPassKeepSize)
+        reset(upscaleFinalPassMaxMegapixels)
         reset(translateEnabled)
         reset(translateFrom)
         reset(translateTo)
@@ -150,6 +156,9 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
         copy(base.upscaleNormalizeEnabled)
         copy(base.upscaleNormalizeShortSide)
         copy(base.upscalePreloadCount)
+        copy(base.upscaleFinalPassEnabled)
+        copy(base.upscaleFinalPassKeepSize)
+        copy(base.upscaleFinalPassMaxMegapixels)
         copy(base.translateEnabled)
         copy(base.translateFrom)
         copy(base.translateTo)
