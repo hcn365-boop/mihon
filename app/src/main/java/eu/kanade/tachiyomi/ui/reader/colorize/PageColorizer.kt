@@ -19,7 +19,6 @@ import java.io.File
 import java.security.MessageDigest
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
 import eu.kanade.translation.translator.TranslatorSettings
 import eu.kanade.translation.MangaTranslationContext
 
@@ -236,19 +235,7 @@ object PageColorizer {
     }
 
     /** A page bigger than the allowed output size is scaled down: the viewer needs a full buffer per page. */
-    private fun capSize(bitmap: Bitmap): Bitmap {
-        val outputPixels = bitmap.width.toLong() * bitmap.height
-        if (outputPixels <= AiConfig.upscaleMaxOutputPixels) return bitmap
-        val ratio = sqrt(AiConfig.upscaleMaxOutputPixels.toDouble() / outputPixels)
-        val smaller = Bitmap.createScaledBitmap(
-            bitmap,
-            (bitmap.width * ratio).roundToInt().coerceAtLeast(1),
-            (bitmap.height * ratio).roundToInt().coerceAtLeast(1),
-            true,
-        )
-        if (smaller !== bitmap) bitmap.recycle()
-        return smaller
-    }
+    private fun capSize(bitmap: Bitmap): Bitmap = PageResizer.fitTo(bitmap, AiConfig.upscaleMaxOutputPixels)
 
     /** The last step: the built-in ACNet model refines the page. Not run when the page or memory is too big. */
     private fun acnetFinalPass(context: Context, page: Bitmap): Bitmap {
@@ -264,7 +251,7 @@ object PageColorizer {
         val enlarged = engine.upscale(page)
         if (!AiConfig.upscaleFinalPassKeepSize) return capSize(enlarged)
         // Back to the size before this step: lines come out sharper and the page does not grow.
-        val restored = Bitmap.createScaledBitmap(enlarged, page.width, page.height, true)
+        val restored = PageResizer.resizeTo(enlarged, page.width, page.height)
         if (restored !== enlarged) enlarged.recycle()
         return restored
     }
@@ -314,9 +301,10 @@ object PageColorizer {
                         page = engine.render(working, chroma, intensity)
                     }
                     if (upscale) {
-                        var enlarged = (upscalerEngine(context) ?: error("No upscaler model")).process(page)
+                        val enlarged = (upscalerEngine(context) ?: error("No upscaler model"))
+                            .process(page, AiConfig.upscaleMaxOutputPixels, PageResizer.MAX_SIDE)
                         if (page !== working) page.recycle()
-                        page = capSize(enlarged)
+                        page = enlarged
                     }
                     if (finalPass) {
                         val refined = acnetFinalPass(context, page)
