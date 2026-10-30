@@ -217,12 +217,13 @@ object PageColorizer {
         if (translationConfig == null) return base?.let { Buffer().write(it) }
 
         if (!display) {
-            // Read the text now and queue it for translation, so the page is quick to finish later.
+            // Read the text now and queue it for translation using the processed/upscaled base image if available[span_1](start_span)[span_1](end_span).
             var ocrBitmap: Bitmap? = null
             try {
                 val s = translationConfig
+                val targetBytes = base ?: bytes
                 PageTranslationService.enqueue(context, effective!!, s.ocrMode, imageHash, s.limits) {
-                    decode(bytes).also { ocrBitmap = it }
+                    decode(targetBytes).also { ocrBitmap = it }
                 }
             } finally {
                 ocrBitmap?.recycle()
@@ -230,7 +231,7 @@ object PageColorizer {
             return base?.let { Buffer().write(it) }
         }
 
-        return translateAndDraw(context, translationConfig, effective!!, imageHash, bytes, base ?: bytes, finalName!!)
+        return translateAndDraw(context, translationConfig, effective!!, imageHash, base ?: bytes, finalName!!)
             ?: base?.let { Buffer().write(it) }
     }
 
@@ -347,7 +348,6 @@ object PageColorizer {
         config: TranslationConfig,
         settings: TranslatorSettings,
         imageHash: String,
-        originalBytes: ByteArray,
         baseBytes: ByteArray,
         finalName: String,
     ): BufferedSource? {
@@ -359,7 +359,7 @@ object PageColorizer {
                 config.ocrMode,
                 imageHash,
                 config.limits,
-            ) { decode(originalBytes).also { ocrBitmap = it } }
+            ) { decode(baseBytes).also { ocrBitmap = it } } // <-- تم التحديث لاستخدام الصورة المُعالجة/المكبرة (baseBytes) للـ OCR لضمان دقة أعلى وتطابق تام للإحداثيات[span_2](start_span)[span_2](end_span)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
