@@ -71,7 +71,10 @@ class Anime4kUpscaler(
         }
     }
 
-    override fun process(input: Bitmap): Bitmap = upscale(input)
+    override fun process(input: Bitmap, maxPixels: Long, maxSide: Int): Bitmap {
+        val enlarged = upscale(input)
+        return PageResizer.fitTo(enlarged, maxPixels, maxSide)
+    }
 
     fun upscale(input: Bitmap, maxShortSide: Int = 0): Bitmap = Mats().use { m ->
         val rgba = m.mat()
