@@ -170,6 +170,7 @@ internal object TextBlockMerger {
                 .replace(Regex("\\s+"), " ") // توحيد المسافات الزائدة
                 .trim()
 
+            // نحذف في البداية فقط إذا أصبح النص فارغاً تماماً (مثل الروابط البحتة أو الرموز الصرفة)[span_0](start_span)[span_0](end_span)
             if (cleanedText.isBlank()) {
                 null
             } else {
@@ -186,6 +187,7 @@ internal object TextBlockMerger {
 
         // ═══════════════════════════════════════════════════════════════════
         // نظام الدمج التكراري الآمن (Iterative Merge Pass)
+        // يضمن دمج أي أجزاء أو سطور متلامسة لنفس الفقاعة تماماً حتى الاستقرار
         // ═══════════════════════════════════════════════════════════════════
         var currentBlocks = filteredBlocks.toMutableList()
         var mergedAny: Boolean
@@ -260,11 +262,15 @@ internal object TextBlockMerger {
         }.toMutableList()
 
         // ═══════════════════════════════════════════════════════════════
-        // منع تصادم الفقاعات
+        // منع تصادم الفقاعات — مع العودة للحجم الأساسي عند التعذر
         // ═══════════════════════════════════════════════════════════════
         resolveCollisions(expandedBlocks, imgWidth, imgHeight)
         return expandedBlocks
     }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ═══  آلية منع تصادم الفقاعات  ════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════════
 
     private fun resolveCollisions(blocks: MutableList<TranslationBlock>, imgWidth: Float, imgHeight: Float) {
         val iterations = 6
@@ -401,22 +407,17 @@ internal object TextBlockMerger {
         val sH = max(r1.symHeight, max(r2.symHeight, 12f))
         val sW = max(r1.symWidth, max(r2.symWidth, 12f))
 
-        // 1. تقييد الدمج الجانبي بتقليل الفجوة الأفقية المسموحة
-        // 2. تسهيل الدمج العمودي بزيادة الفجوة العمودية المسموحة
-        val maxAllowedGapX = sW * 0.8f // تم تشديدها لتجنب الدمج الجانبي الخاطئ
-        val maxAllowedGapY = sH * 1.5f * yThresholdFactor // تم توسيعها لتسهيل دمج الأسطر العمودية
+        val maxAllowedGapX = sW * 1.2f
+        val maxAllowedGapY = sH * 1.2f
 
         val yOverlap = max(0f, min(r1Bottom, r2Bottom) - max(r1.y, r2.y))
         val xOverlap = max(0f, min(r1Right, r2Right) - max(r1.x, r2.x))
 
         val minHeight = min(r1.height, r2.height)
-        // تشديد شرط التداخل للدمج الجانبي
-        val isFullVerticalCover = yOverlap >= (minHeight * 0.85f)
+        val isFullVerticalCover = yOverlap >= (minHeight * 0.75f)
 
         val minWidth = min(r1.width, r2.width)
-        // تخفيف شرط التداخل للدمج العمودي لتسهيل دمج الأسطر المتقطعة
-        val isFullHorizontalCover = xOverlap >= (minWidth * 0.80f)
-        
+        val isFullHorizontalCover = xOverlap >= (minWidth * 0.95f)
         val isInCross = isFullHorizontalCover || isFullVerticalCover
         if (!isInCross) return false
 
@@ -428,15 +429,15 @@ internal object TextBlockMerger {
             val vertGap = if (r1.y < r2.y) r2.y - r1Bottom else r1.y - r2Bottom
             if (vertGap > maxAllowedGapY) return false
 
-            val isTouchingOrClose = sideGap <= maxAllowedGapX && vertGap <= maxAllowedGapY
+            val isTouchingOrClose = sideGap <= (sW * 1.2f) && vertGap <= (sH * 1.2f)
             if (!isTouchingOrClose) return false
 
             val dy = abs(r1.y - r2.y)
             val dx = abs(r1.x - r2.x)
-            val isOriginsClose = dy < maxAllowedGapY && dx < maxAllowedGapX
-            val isSideBySide = sideGap < maxAllowedGapX && dy < maxAllowedGapY
+            val isOriginsClose = dy < (sH * 1.2f) && dx < (sW * 1.2f)
+            val isSideBySide = sideGap < (sW * 1.2f) && dy < (sH * 1.2f)
             val alignedVertically = yOverlap > (sH * 0.15f)
-            val closeHorizontally = sideGap < maxAllowedGapX
+            val closeHorizontally = sideGap < (sW * 1.2f)
             return isOriginsClose || isSideBySide || (closeHorizontally && alignedVertically)
         } else {
             val vGap = max(0f, if (r1.y < r2.y) r2.y - r1Bottom else r1.y - r2Bottom)
@@ -446,10 +447,10 @@ internal object TextBlockMerger {
             val sideGap = if (r1.x < r2.x) r2.x - r1Right else r1.x - r2Right
             if (sideGap > maxAllowedGapX) return false
 
-            val hasHighSideOverlap = xOverlap > (minWidth * 0.60f)
+            val hasHighSideOverlap = xOverlap > (minWidth * 0.70f)
             val centerR1X = r1.x + r1.width / 2f
             val centerR2X = r2.x + r2.width / 2f
-            val centersAligned = abs(centerR1X - centerR2X) < max(r1.width, r2.width) * 0.40f
+            val centersAligned = abs(centerR1X - centerR2X) < max(r1.width, r2.width) * 0.35f
             val isTouching = vGap <= maxAllowedGapY
             return (hasHighSideOverlap || centersAligned) && isTouching
         }
