@@ -12,6 +12,7 @@ import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Rect
+import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 import java.io.Closeable
 import java.io.File
@@ -20,11 +21,12 @@ import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** Something that enlarges (or cleans) a page bitmap. */
 interface PageUpscaler : Closeable {
     /** @return a new bitmap; the input is not changed or recycled */
-    fun process(input: Bitmap): Bitmap
+    fun process(input: Bitmap, maxPixels: Long = Long.MAX_VALUE, maxSide: Int = Int.MAX_VALUE): Bitmap
 }
 
 /**
@@ -59,7 +61,7 @@ class Anime4kStageUpscaler(files: List<File>, acceleration: Acceleration, thread
         scale = stages.fold(1) { total, stage -> total * stage.scale }
     }
 
-    override fun process(input: Bitmap): Bitmap = Mats().use { m ->
+    override fun process(input: Bitmap, maxPixels: Long, maxSide: Int): Bitmap = Mats().use { m ->
         val rgba = m.mat()
         toMat(input, rgba)
         var current = m.mat()
@@ -69,6 +71,18 @@ class Anime4kStageUpscaler(files: List<File>, acceleration: Acceleration, thread
             val next = runStage(stage, current, m)
             m.free(current)
             current = next
+        }
+        // Too big for the limits: scale down with area averaging before the bitmap is made.
+        val ratio = PageResizer.fitRatio(current.cols(), current.rows(), maxPixels, maxSide)
+        if (ratio < 1.0) {
+            val smaller = m.mat()
+            val size = Size(
+                max(1, (current.cols() * ratio).roundToInt()).toDouble(),
+                max(1, (current.rows() * ratio).roundToInt()).toDouble(),
+            )
+            Imgproc.resize(current, smaller, size, 0.0, 0.0, Imgproc.INTER_AREA)
+            m.free(current)
+            current = smaller
         }
         val out = m.mat()
         Imgproc.cvtColor(current, out, Imgproc.COLOR_RGB2RGBA)
