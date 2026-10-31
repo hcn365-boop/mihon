@@ -2,14 +2,17 @@ package eu.kanade.translation.recognizer
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import java.nio.FloatBuffer
+import kotlin.math.min
 
 /**
- * كلاس مسؤول عن تشغيل نموذج Manga-Bubble-YOLO (YOLOv8/v26) لاكتشاف
- * فقاعات الحوار في المانجا وتجاهل المؤثرات الصوتية (SFX) الخارجية.
+ * كلاس مسؤول عن تشغيل نموذج Manga-Bubble-YOLO بدقة عالية باستخدام
+ * تقنية Letterboxing للحفاظ على أبعاد الصفحة وحساب الإحداثيات الأصلية.
  */
 class YoloBubbleDetector(context: Context) {
 
@@ -17,7 +20,6 @@ class YoloBubbleDetector(context: Context) {
     private val session: OrtSession
 
     init {
-        // قراءة ملف نموذج YOLO من مجلد الـ assets الذي أضفته
         val modelBytes = context.assets.open("yolo/yolo26n.onnx").readBytes()
         session = env.createSession(modelBytes)
     }
@@ -30,21 +32,32 @@ class YoloBubbleDetector(context: Context) {
         val confidence: Float
     )
 
-    /**
-     * يقوم بتحليل الصورة وإرجاع إحداثيات فقاعات الحوار فقط.
-     */
-    fun detectBubbles(bitmap: Bitmap, confidenceThreshold: Float = 0.3f): List<BubbleBox> {
-        val originalWidth = bitmap.width.toFloat()
-        val originalHeight = bitmap.height.toFloat()
-
-        // نموذج YOLO يتطلب عادة أبعاد ثابتة للتدخل (مثل 640x640)
+    fun detectBubbles(bitmap: Bitmap, confidenceThreshold: Float = 0.25f): List<BubbleBox> {
+        val origWidth = bitmap.width.toFloat()
+        val origHeight = bitmap.height.toFloat()
         val inputSize = 640
-        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, inputSize, inputSize, true)
 
-        // تحضير الـ Tensor بجهد NCHW وتطبيع القيم بين [0, 1]
+        // 1. حساب معامل التكبير/التصغير مع الحفاظ على نسبة الأبعاد (Aspect Ratio)
+        val scale = min(inputSize / origWidth, inputSize / origHeight)
+        val scaledW = (origWidth * scale).toInt()
+        val scaledH = (origHeight * scale).toInt()
+
+        // 2. تغيير مقاس الصورة مع الحفاظ على النسبة
+        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledW, scaledH, true)
+
+        // 3. إنشآء لوحة مربعية (640x640) بإطار أبيض (Letterbox) ووضع الصورة في المنتصف
+        val letterboxedBitmap = Bitmap.createBitmap(inputSize, inputSize, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(letterboxedBitmap)
+        canvas.drawColor(Color.WHITE)
+
+        val padX = (inputSize - scaledW) / 2f
+        val padY = (inputSize - scaledH) / 2f
+        canvas.drawBitmap(scaledBitmap, padX, padY, null)
+
+        // 4. تجهيز الـ Tensor المدخل (Normalization + RGB Channel Ordering)
         val tensorData = FloatBuffer.allocate(1 * 3 * inputSize * inputSize)
         val intValues = IntArray(inputSize * inputSize)
-        scaledBitmap.getPixels(intValues, 0, inputSize, 0, 0, inputSize, inputSize)
+        letterboxedBitmap.getPixels(intValues, 0, inputSize, 0, 0, inputSize, inputSize)
 
         for (i in intValues.indices) {
             val pixel = intValues[i]
@@ -62,54 +75,64 @@ class YoloBubbleDetector(context: Context) {
         val inputTensor = OnnxTensor.createTensor(env, tensorData, inputShape)
         val inputName = session.inputNames.iterator().next()
 
-        // تشغيل نموذج الـ AI
+        // 5. تشغيل النموذج
         val results = session.run(mapOf(inputName to inputTensor))
-        
-        // استخراج النتائج وتحليل مخرجات الـ Tensor
         val rawOutput = results[0].value as Array<*>
-        val boxes = parseYoloOutput(rawOutput, originalWidth, originalHeight, inputSize.toFloat(), confidenceThreshold)
 
-        // تنظيف الذاكرة لمنع تسريب الموارد
+        // 6. استخراج النتائج وإعادة طرح مسافات الـ Padding والـ Scale لاستعادة الإحداثيات الأصلية
+        val boxes = parseYoloOutput(
+            rawOutput = rawOutput,
+            scale = scale,
+            padX = padX,
+            padY = padY,
+            origWidth = origWidth,
+            origHeight = origHeight,
+            threshold = confidenceThreshold
+        )
+
+        // تنظيف الذاكرة
         inputTensor.close()
         results.close()
-        if (scaledBitmap !== bitmap) {
-            scaledBitmap.recycle()
-        }
+        if (scaledBitmap !== bitmap) scaledBitmap.recycle()
+        letterboxedBitmap.recycle()
 
         return boxes
     }
 
     private fun parseYoloOutput(
         rawOutput: Array<*>,
+        scale: Float,
+        padX: Float,
+        padY: Float,
         origWidth: Float,
         origHeight: Float,
-        inputSize: Float,
         threshold: Float
     ): List<BubbleBox> {
         val boxes = mutableListOf<BubbleBox>()
         try {
-            // مخرجات YOLO القياسية بصيغة [1, 4 + classes, N] أو ما يشابهها
-            // يتم تحويل الإحداثيات وتطابقها مع مقاسات الصورة الأصلية للمانجا
             val outputTensor = rawOutput[0] as? Array<FloatArray> ?: return boxes
-            
-            // تحليل وتصفية المربعات بناءً على نسبة الثقة (Confidence)
-            // (تختلف بنية المصفوفة قليلاً حسب طريقة تصدير النموذج إلى ONNX، وغالباً تكون الأعمدة ممثلة للإحداثيات)
             val numDetections = outputTensor[0].size
+
             for (i in 0 until numDetections) {
-                val score = outputTensor[4][i] // افتراض مكان درجة الثقة
+                val score = outputTensor[4][i]
                 if (score >= threshold) {
                     val xc = outputTensor[0][i]
                     val yc = outputTensor[1][i]
                     val w = outputTensor[2][i]
                     val h = outputTensor[3][i]
 
-                    // إعادة التحجيم لتناسب أبعاد الصفحة الأصلية
-                    val x1 = (xc - w / 2) * (origWidth / inputSize)
-                    val y1 = (yc - h / 2) * (origHeight / inputSize)
-                    val ww = w * (origWidth / inputSize)
-                    val hh = h * (origHeight / inputSize)
+                    // إلغاء تأثير الـ Letterbox للعودة إلى أبعاد الصفحة الأصلية
+                    val realXc = (xc - padX) / scale
+                    val realYc = (yc - padY) / scale
+                    val realW = w / scale
+                    val realH = h / scale
 
-                    boxes.add(BubbleBox(x1, y1, ww, hh, score))
+                    val x1 = (realXc - realW / 2f).coerceIn(0f, origWidth)
+                    val y1 = (realYc - realH / 2f).coerceIn(0f, origHeight)
+                    val finalW = realW.coerceAtMost(origWidth - x1)
+                    val finalH = realH.coerceAtMost(origHeight - y1)
+
+                    boxes.add(BubbleBox(x1, y1, finalW, finalH, score))
                 }
             }
         } catch (e: Exception) {
