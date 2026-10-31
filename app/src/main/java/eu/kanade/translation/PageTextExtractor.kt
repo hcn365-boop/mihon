@@ -438,7 +438,7 @@ internal object TextBlockMerger {
         val minX = min(a.x, b.x); val minY = min(a.y, b.y)
         val maxX = max(a.x + a.width, b.x + b.width); val maxY = max(a.y + a.height, b.y + b.height)
         val isVertical = abs(a.angle) in 70.0..110.0
-        val的过程 = if (isVertical) {
+        val ordered = if (isVertical) {
             if (a.x > b.x) listOf(a, b) else listOf(b, a)
         } else {
             if (abs(a.y - b.y) > max(a.symHeight, b.symHeight) * 0.5f) {
@@ -450,13 +450,13 @@ internal object TextBlockMerger {
         }
         
         val totalLen = (a.text.length + b.text.length).coerceAtLeast(1)
-        val joinedText = if (的过程.any { it.text.any { c -> c.code in 0x4E00..0x9FFF || c.code in 0x3040..0x309F || c.code in 0x30A0..0x30FF } }) {
-            的过程.joinToString("") { it.text.trim() }
+        val joinedText = if (ordered.any { it.text.any { c -> c.code in 0x4E00..0x9FFF || c.code in 0x3040..0x309F || c.code in 0x30A0..0x30FF } }) {
+            ordered.joinToString("") { it.text.trim() }
         } else {
-            的过程.joinToString(" ") { it.text.trim() }
+            ordered.joinToString(" ") { it.text.trim() }
         }
 
-        val joinedTranslation =的过程.joinToString(" ") { it.translation.trim() }.trim()
+        val joinedTranslation = ordered.joinToString(" ") { it.translation.trim() }.trim()
 
         return TranslationBlock(
             text = joinedText,
