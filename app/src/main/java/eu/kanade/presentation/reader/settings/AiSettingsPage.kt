@@ -87,32 +87,26 @@ internal fun ColorizeSettings(prefs: AiPrefs) {
     val enabled by prefs.colorizeEnabled.collectAsState()
     var status by remember { mutableStateOf("") }
     var colorizerInstalled by remember { mutableStateOf(ColorizerModelInstaller.isInstalled(context)) }
-    var samInstalled by remember { mutableStateOf(ColorizerModelInstaller.isInstalled(context, ModelKind.COLORIZER_SAM)) } // SAM
-    var importKind by remember { mutableStateOf(ModelKind.COLORIZER) }
 
     fun refresh() {
         colorizerInstalled = ColorizerModelInstaller.isInstalled(context)
-        samInstalled = ColorizerModelInstaller.isInstalled(context, ModelKind.COLORIZER_SAM) // SAM
     }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             scope.launch {
-                runInstall(context, { status = it }) { ColorizerModelInstaller.importModel(context, importKind, uri) }
+                runInstall(context, { status = it }) { ColorizerModelInstaller.importModel(context, ModelKind.COLORIZER, uri) }
                 refresh()
             }
         }
     }
 
-    fun download(kind: ModelKind) {
+    fun download() {
         if (status.isNotEmpty()) return
-        val url = when (kind) {
-            ModelKind.COLORIZER -> prefs.colorizeModelUrl.get()
-            ModelKind.COLORIZER_SAM -> prefs.colorizeSamModelUrl.get() // SAM
-        }
+        val url = prefs.colorizeModelUrl.get()
         scope.launch {
             runInstall(context, { status = it }) {
-                ColorizerModelInstaller.downloadModel(context, kind, url) { progress ->
+                ColorizerModelInstaller.downloadModel(context, ModelKind.COLORIZER, url) { progress ->
                     status = "Downloading ${(progress * 100).toInt()}%"
                 }
             }
@@ -125,33 +119,19 @@ internal fun ColorizeSettings(prefs: AiPrefs) {
         IntSlider("Color intensity", prefs.colorizeIntensity, 0..120) { "$it%" }
     }
     
-    // تم تحديث التسمية لتوضيح الاعتماد على ملف الميزات الثنائي sam_features.bin
-    CheckboxItem(label = "Use the SAM features guide (needs sam_features.bin)", pref = prefs.colorizeUseSam) // SAM
+    // خيار تفعيل دليلي الـ SAM مباشرة من الملف المضمن في مجلد الـ Assets
+    CheckboxItem(label = "Use the SAM features guide", pref = prefs.colorizeUseSam)
 
     ModelRow(
         title = "Colorizer model",
         installed = colorizerInstalled,
         status = status,
-        onDownload = { download(ModelKind.COLORIZER) },
+        onDownload = { download() },
         onImport = {
-            importKind = ModelKind.COLORIZER
             importLauncher.launch(arrayOf("*/*"))
         },
     )
     UrlField("Colorizer model link", prefs.colorizeModelUrl)
-    
-    // تم تحديث مسمى خانة النموذج الاختياري إلى ملف ميزات الـ SAM
-    ModelRow( // SAM
-        title = "SAM features file (optional)", // SAM
-        installed = samInstalled, // SAM
-        status = status, // SAM
-        onDownload = { download(ModelKind.COLORIZER_SAM) }, // SAM
-        onImport = { // SAM
-            importKind = ModelKind.COLORIZER_SAM // SAM
-            importLauncher.launch(arrayOf("*/*")) // SAM
-        }, // SAM
-    ) // SAM
-    UrlField("SAM features link", prefs.colorizeSamModelUrl) // SAM
 
     IntSlider("Colorize: largest page", prefs.colorizeMaxMegapixels, 1..40) { "$it MP" }
     IntSlider("Pages colorized ahead", prefs.colorizePreloadCount, 0..10) { "$it" }
