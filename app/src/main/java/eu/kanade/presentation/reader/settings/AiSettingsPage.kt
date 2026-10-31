@@ -124,7 +124,9 @@ internal fun ColorizeSettings(prefs: AiPrefs) {
     if (enabled) {
         IntSlider("Color intensity", prefs.colorizeIntensity, 0..120) { "$it%" }
     }
-    CheckboxItem(label = "Use the SAM encoder guide (needs the SAM encoder file)", pref = prefs.colorizeUseSam) // SAM
+    
+    // تم تحديث التسمية لتوضيح الاعتماد على ملف الميزات الثنائي sam_features.bin
+    CheckboxItem(label = "Use the SAM features guide (needs sam_features.bin)", pref = prefs.colorizeUseSam) // SAM
 
     ModelRow(
         title = "Colorizer model",
@@ -137,8 +139,10 @@ internal fun ColorizeSettings(prefs: AiPrefs) {
         },
     )
     UrlField("Colorizer model link", prefs.colorizeModelUrl)
+    
+    // تم تحديث مسمى خانة النموذج الاختياري إلى ملف ميزات الـ SAM
     ModelRow( // SAM
-        title = "SAM encoder (optional)", // SAM
+        title = "SAM features file (optional)", // SAM
         installed = samInstalled, // SAM
         status = status, // SAM
         onDownload = { download(ModelKind.COLORIZER_SAM) }, // SAM
@@ -147,7 +151,7 @@ internal fun ColorizeSettings(prefs: AiPrefs) {
             importLauncher.launch(arrayOf("*/*")) // SAM
         }, // SAM
     ) // SAM
-    UrlField("SAM encoder link", prefs.colorizeSamModelUrl) // SAM
+    UrlField("SAM features link", prefs.colorizeSamModelUrl) // SAM
 
     IntSlider("Colorize: largest page", prefs.colorizeMaxMegapixels, 1..40) { "$it MP" }
     IntSlider("Pages colorized ahead", prefs.colorizePreloadCount, 0..10) { "$it" }
