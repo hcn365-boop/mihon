@@ -221,7 +221,6 @@ object PageColorizer {
         if (translationConfig == null) return base?.let { Buffer().write(it) }
 
         if (!display) {
-            // Read the text now and queue it for translation using the processed/upscaled base image if available[span_2](start_span)[span_2](end_span).
             var ocrBitmap: Bitmap? = null
             try {
                 val s = translationConfig
@@ -250,12 +249,10 @@ object PageColorizer {
         val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
         val key = "${acceleration}_${AiConfig.aiThreads}"
         
-        // تم تمرير الـ Context مباشرة بدلاً من الـ File ليتوافق مع المسار الثابت داخل الـ Assets
         val engine = acnetManager.getOrPut(key) { Anime4kUpscaler(context, acceleration, AiConfig.aiThreads) }
         
         val enlarged = engine.upscale(page)
         if (!AiConfig.upscaleFinalPassKeepSize) return capSize(enlarged)
-        // Back to the size before this step: lines come out sharper and the page does not grow.
         val restored = PageResizer.resizeTo(enlarged, page.width, page.height)
         if (restored !== enlarged) enlarged.recycle()
         return restored
@@ -280,19 +277,16 @@ object PageColorizer {
         }
 
         val original = decode(bytes) ?: return null
-        // Many sites enlarge small scans: shrinking them back first removes the empty pixels.
         val working = if (shrinkSide > 0) PageResizer.shrink(original, shrinkSide) else original
         var result: Bitmap? = null
         try {
             var color = doColor
-            // The upscaler output is opaque, so pages with transparency are not upscaled.
             val upscale = doUpscale && !original.hasAlpha()
             val finalPass = wantFinal && acnetReady(context) && !original.hasAlpha()
             if (color && !looksGrayscale(working)) color = false
             if (!color && !upscale && !finalPass && working === original) return null
             if (estimateBytes(pixels, color, upscale, upscaleScale()) > AiConfig.memoryBudgetBytes) return null
 
-            // One page at a time: keeps peak memory low and protects the ONNX sessions.
             val processed = try {
                 mutex.withLock {
                     var page = working
@@ -317,7 +311,7 @@ object PageColorizer {
                         page = refined
                     }
                     
-                    // تطبيق فلتر التشبع الآمن لرفع حيوية الألوان (1.3f تعني زيادة التشبع بنسبة 30%، يمكنك تعديلها حسب رغبتك)
+                    // تطبيق فلتر التشبع الآمن لرفع حيوية الألوان (يمكنك تعديل القيمة 1.3f حسب رغبتك)
                     val saturated = applySaturation(page, 1.3f)
                     if (saturated !== page && page !== working) page.recycle()
                     saturated
@@ -328,7 +322,6 @@ object PageColorizer {
                 val accelerated = (color && AiConfig.colorizeAcceleration != Acceleration.CPU) ||
                     (upscale && AiConfig.upscaleAcceleration != Acceleration.CPU)
                 if (accelerated && !acceleratorFailed) {
-                    // The accelerator failed: use the CPU from now on (until the app is restarted).
                     acceleratorFailed = true
                     mutex.withLock { releaseEngines() }
                 }
@@ -347,7 +340,7 @@ object PageColorizer {
     }
 
     /**
-     * دالة آمنة لتطبيق تشبع الألوان عبر ColorMatrix دون التأثير على حسابات OpenCV أو نموذج ONNX.
+     * دالة آمنة لتطبيق تشبع الألوان عبر ColorMatrix دون التأثير على حسابات OpenCV أو نموذج ONNX[span_2](start_span)[span_2](end_span).
      */
     private fun applySaturation(bitmap: Bitmap, saturation: Float): Bitmap {
         val output = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config ?: Bitmap.Config.ARGB_8888)
@@ -361,11 +354,6 @@ object PageColorizer {
         return output
     }
 
-    /**
-     * Gets the page's translation (from the store, or by reading and translating it) and draws it
-     * on the base image. Returns null when the page has no text or the translation failed,
-     * so the caller shows the base image instead.
-     */
     private suspend fun translateAndDraw(
         context: Context,
         config: TranslationConfig,
@@ -382,7 +370,7 @@ object PageColorizer {
                 config.ocrMode,
                 imageHash,
                 config.limits,
-            ) { decode(baseBytes).also { ocrBitmap = it } } // <-- تم التحديث لاستخدام الصورة المُعالجة/المكبرة (baseBytes) للـ OCR لضمان دقة أعلى وتطابق تام للإحداثيات[span_3](start_span)[span_3](end_span)
+            ) { decode(baseBytes).also { ocrBitmap = it } }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -406,7 +394,6 @@ object PageColorizer {
         }
     }
 
-    /** Runs only the colorizer model and caches its chroma, so the page is quick to color later. */
     private suspend fun warmChroma(context: Context, source: BufferedSource) {
         val model = modelFile(context)
         if (!AiConfig.colorizeEnabled || model.length() == 0L) return
@@ -431,10 +418,6 @@ object PageColorizer {
         }
     }
 
-    /**
-     * Rough peak memory for one page, in bytes, from its pixel count. It is an estimate,
-     * not a hard limit: the system may still run out of memory (the page is then left as it is).
-     */
     private fun estimateBytes(pixels: Long, color: Boolean, upscale: Boolean, scale: Int): Long {
         var total = pixels * 4
         if (color) total += pixels * 20
@@ -450,8 +433,6 @@ object PageColorizer {
         bitmap.compress(format, JPEG_QUALITY, output)
         return output.toByteArray()
     }
-
-    // region Engines (managed securely via EngineManager)
 
     @Volatile
     private var acceleratorFailed = false
@@ -498,9 +479,6 @@ object PageColorizer {
         return upscalerManager.getOrPut(key) { Anime4kStageUpscaler(files, acceleration, AiConfig.aiThreads) }
     }
 
-    // endregion
-
-    /** Samples the page. Colored covers and already-colored pages are left alone. */
     private fun looksGrayscale(bitmap: Bitmap): Boolean {
         val side = 64
         val sample = Bitmap.createScaledBitmap(bitmap, side, side, true)
@@ -519,8 +497,6 @@ object PageColorizer {
             if (sample !== bitmap) sample.recycle()
         }
     }
-
-    // region Processed page cache (base and final images, trimmed to AiConfig.cacheBytes)
 
     private fun hash(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
@@ -557,10 +533,6 @@ object PageColorizer {
         trimCache(dir, AiConfig.cacheBytes)
     }
 
-    // endregion
-
-    // region Chroma cache (a and b stored as signed bytes, about 0.5 MB per page)
-
     private fun chromaFile(context: Context, imageHash: String, model: File): File =
         File(File(context.cacheDir, CHROMA_CACHE_DIR), imageHash + "_" + model.length() + (if (samActive(context)) "_sam" else ""))
 
@@ -571,7 +543,7 @@ object PageColorizer {
         file.setLastModified(System.currentTimeMillis())
         return MangaColorizer.Chroma(
             FloatArray(CHROMA_SIZE) { data[it].toFloat() },
-            FloatArray(CHROOS_SIZE = CHROMA_SIZE) { data[CHROMA_SIZE + it].toFloat() }
+            FloatArray(CHROMA_SIZE) { data[CHROMA_SIZE + it].toFloat() },
         )
     }
 
@@ -588,8 +560,6 @@ object PageColorizer {
         temp.renameTo(file)
         trimCache(dir, MAX_CHROMA_CACHE_BYTES)
     }
-
-    // endregion
 
     private fun trimCache(dir: File, limit: Long) {
         val files = dir.listFiles()
