@@ -382,10 +382,68 @@ internal object TextBlockMerger {
         return count
     }
 
-    private fun isOverlapping(a: TranslationBlock, b: TranslationBlock): Boolean {
-        return a.x < b.x + b.width && a.x + a.width > b.x &&
-            a.y < b.y + b.height && a.y + a.height > b.y
+        private fun isOverlapping(a: TranslationBlock, b: TranslationBlock): Boolean {
+        // الفحص السريع: إذا كانت الفقاعتان أفقيتين تماماً (بدون زاوية ميلان معتبرة)
+        if (abs(a.angle) < 1f && abs(b.angle) < 1f) {
+            return a.x < b.x + b.width && a.x + a.width > b.x &&
+                   a.y < b.y + b.height && a.y + a.height > b.y
+        }
+
+        // الفحص المتقدم والدقيق للمستطيلات الموجهة (OBB) باستخدام نظرية المحور الفاصل (SAT)
+        return checkOBBOverlap(a, b)
     }
+
+    private fun checkOBBOverlap(a: TranslationBlock, b: TranslationBlock): Boolean {
+        // مركز ووصف المستطيل الأول A
+        val radA = Math.toRadians(a.angle.toDouble())
+        val cosA = cos(radA).toFloat()
+        val sinA = sin(radA).toFloat()
+        
+        val cxA = a.x + a.width / 2f
+        val cyA = a.y + a.height / 2f
+        val hwA = a.width / 2f
+        val hhA = a.height / 2f
+
+        // مركز ووصف المستطيل الثاني B
+        val radB = Math.toRadians(b.angle.toDouble())
+        val cosB = cos(radB).toFloat()
+        val sinB = sin(radB).toFloat()
+        
+        val cxB = b.x + b.width / 2f
+        val cyB = b.y + b.height / 2f
+        val hwB = b.width / 2f
+        val hhB = b.height / 2f
+
+        // المسافة بين المركزين
+        val dx = cxB - cxA
+        val dy = cyB - cyA
+
+        // دالة مساعدة لحساب إسقاط المستطيلين على أي محور واختبار التصادم عليه
+        fun testAxis(axisX: Float, axisY: Float): Boolean {
+            val distance = abs(dx * axisX + dy * axisY)
+            
+            // نصف عرض الإسقاط لـ A على المحور
+            constval radiusA = hwA * abs(cosA * axisX + sinA * axisY) + hhA * abs(-sinA * axisX + cosA * axisY)
+            // نصف عرض الإسقاط لـ B على المحور
+            constval radiusB = hwB * abs(cosB * axisX + sinB * axisY) + hhB * abs(-sinB * axisX + cosB * axisY)
+            
+            return distance <= (radiusA + radiusB)
+        }
+
+        // اختبار المحاور الأربعة الرئيسية للمستطيلين (محوري A ومحوري B)
+        // 1. محور X الخاص بـ A
+        if (!testAxis(cosA, sinA)) return false
+        // 2. محور Y الخاص بـ A
+        if (!testAxis(-sinA, cosA)) return false
+        // 3. محور X الخاص بـ B
+        if (!testAxis(cosB, sinB)) return false
+        // 4. محور Y الخاص بـ B
+        if (!testAxis(-sinB, cosB)) return false
+
+        // إذا تداخلت الإسقاطات على المحاور الأربعة، فهذا يعني وجود تقاطع حقيقي دقيق
+        return true
+    }
+
 
     private fun shouldMergeTextBlock(
         r1: TranslationBlock,
