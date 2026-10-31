@@ -15,8 +15,8 @@ import tachiyomi.core.common.util.system.logcat
 import logcat.LogPriority
 import eu.kanade.tachiyomi.ui.reader.colorize.AiConfig
 
-/** Which OCR engine reads the page. HYBRID runs both and combines the results. */
-enum class OcrMode { MLKIT, PADDLE, HYBRID }
+/** Which OCR engine reads the page. */
+enum class OcrMode { MLKIT, PADDLE }
 
 /** A text box found by an OCR engine, in image pixels. */
 class OcrBox(
@@ -47,7 +47,6 @@ class PageTextExtractor(
         val boxes = when (mode) {
             OcrMode.MLKIT -> mlKitBoxes(image)
             OcrMode.PADDLE -> paddleBoxes(image)
-            OcrMode.HYBRID -> combine(mlKitBoxes(image), paddleBoxes(image))
         }
         logcat(LogPriority.ERROR) { ">>> OCR $mode found ${boxes.size} boxes <<<" }
         if (boxes.isEmpty()) return null
@@ -92,89 +91,6 @@ class PageTextExtractor(
         return recognize(image).filter { it.text.isNotBlank() }
     }
 
-    private fun combine(primary: List<OcrBox>, secondary: List<OcrBox>): List<OcrBox> {
-        val result = primary.toMutableList()
-        for (box in secondary) {
-            val index = result.indexOfFirst { overlapRatio(it, box) > OVERLAP_SAME_BOX }
-            if (index < 0) {
-                result.add(box)
-                continue
-            }
-            val old = result[index]
-            if (box.text.length >= old.text.length * LONGER_TEXT_FACTOR) {
-                result[index] = OcrBox(
-                    text = box.text,
-                    x = old.x,
-                    y = old.y,
-                    width = old.width,
-                    height = old.height,
-                    symWidth = old.symWidth,
-                    symHeight = old.symHeight,
-                    angle = old.angle,
-                )
-            }
-        }
-        return result
-    }
-
-    private fun overlapRatio(a: OcrBox, b: OcrBox): Float {
-        // الفحص السريع إذا لم تكن هناك زاوية ميلان معتبرة
-        if (abs(a.angle) < 1f && abs(b.angle) < 1f) {
-            val width = min(a.x + a.width, b.x + b.width) - max(a.x, b.x)
-            val height = min(a.y + a.height, b.y + b.height) - max(a.y, b.y)
-            if (width <= 0f || height <= 0f) return 0f
-            val smaller = min(a.width * a.height, b.width * b.height)
-            return if (smaller <= 0f) 0f else width * height / smaller
-        }
-
-        // الفحص المتقدم للمستطيلات المائلة (OBB/SAT)
-        if (!checkOcrOBBOverlap(a, b)) return 0f
-
-        val smallerArea = min(a.width * a.height, b.width * b.height)
-        if (smallerArea <= 0f) return 0f
-
-        val cxA = a.x + a.width / 2f
-        val cyA = a.y + a.height / 2f
-        val cxB = b.x + b.width / 2f
-        val cyB = b.y + b.height / 2f
-        val centerDist = sqrt((cxB - cxA) * (cxB - cxA) + (cyB - cyA) * (cyB - cyA))
-        val maxAllowedDist = (max(a.width, b.width) + max(a.height, b.height)) * 0.35f
-        return if (centerDist <= maxAllowedDist) 0.8f else 0.3f
-    }
-
-    private fun checkOcrOBBOverlap(a: OcrBox, b: OcrBox): Boolean {
-        val radA = Math.toRadians(a.angle.toDouble())
-        val cosA = cos(radA).toFloat()
-        val sinA = sin(radA).toFloat()
-        val cxA = a.x + a.width / 2f
-        val cyA = a.y + a.height / 2f
-        val hwA = a.width / 2f
-        val hhA = a.height / 2f
-
-        val radB = Math.toRadians(b.angle.toDouble())
-        val cosB = cos(radB).toFloat()
-        val sinB = sin(radB).toFloat()
-        val cxB = b.x + b.width / 2f
-        val cyB = b.y + b.height / 2f
-        val hwB = b.width / 2f
-        val hhB = b.height / 2f
-
-        val dx = cxB - cxA
-        val dy = cyB - cyA
-
-        fun testAxis(axisX: Float, axisY: Float): Boolean {
-            val distance = abs(dx * axisX + dy * axisY)
-            val radiusA = hwA * abs(cosA * axisX + sinA * axisY) + hhA * abs(-sinA * axisX + cosA * axisY)
-            val radiusB = hwB * abs(cosB * axisX + sinB * axisY) + hhB * abs(-sinB * axisX + cosB * axisY)
-            return distance <= (radiusA + radiusB)
-        }
-
-        return testAxis(cosA, sinA) && 
-               testAxis(-sinA, cosA) && 
-               testAxis(cosB, sinB) && 
-               testAxis(-sinB, cosB)
-    }
-
     private fun OcrBox.toBlock() = TranslationBlock(
         text = text,
         width = width,
@@ -188,8 +104,6 @@ class PageTextExtractor(
 
     companion object {
         const val DEFAULT_SYMBOL = 15f
-        private const val OVERLAP_SAME_BOX = 0.5f
-        private const val LONGER_TEXT_FACTOR = 1.5f
 
         fun isRtlLanguage(language: String): Boolean = language.lowercase().let {
             it.contains("ja") || it.contains("ko") || it.contains("zh") || it.contains("ar")
@@ -413,12 +327,10 @@ internal object TextBlockMerger {
     }
 
     private fun isOverlapping(a: TranslationBlock, b: TranslationBlock): Boolean {
-        // الفحص السريع إذا لم تكن هناك زاوية ميلان معتبرة
         if (abs(a.angle) < 1f && abs(b.angle) < 1f) {
             return a.x < b.x + b.width && a.x + a.width > b.x &&
                 a.y < b.y + b.height && a.y + a.height > b.y
         }
-        // الفحص الدقيق للمستطيلات الموّجهة (OBB / SAT)
         return checkOBBOverlap(a, b)
     }
 
@@ -526,7 +438,7 @@ internal object TextBlockMerger {
         val minX = min(a.x, b.x); val minY = min(a.y, b.y)
         val maxX = max(a.x + a.width, b.x + b.width); val maxY = max(a.y + a.height, b.y + b.height)
         val isVertical = abs(a.angle) in 70.0..110.0
-        val ordered = if (isVertical) {
+        val的过程 = if (isVertical) {
             if (a.x > b.x) listOf(a, b) else listOf(b, a)
         } else {
             if (abs(a.y - b.y) > max(a.symHeight, b.symHeight) * 0.5f) {
@@ -537,15 +449,14 @@ internal object TextBlockMerger {
             }
         }
         
-        // دمج ذكي يتجنب المسافات للغات الآسيوية (CJK) ويتركها للغات الأخرى
         val totalLen = (a.text.length + b.text.length).coerceAtLeast(1)
-        val joinedText = if (ordered.any { it.text.any { c -> c.code in 0x4E00..0x9FFF || c.code in 0x3040..0x309F || c.code in 0x30A0..0x30FF } }) {
-            ordered.joinToString("") { it.text.trim() }
+        val joinedText = if (的过程.any { it.text.any { c -> c.code in 0x4E00..0x9FFF || c.code in 0x3040..0x309F || c.code in 0x30A0..0x30FF } }) {
+            的过程.joinToString("") { it.text.trim() }
         } else {
-            ordered.joinToString(" ") { it.text.trim() }
+            的过程.joinToString(" ") { it.text.trim() }
         }
 
-        val joinedTranslation = ordered.joinToString(" ") { it.translation.trim() }.trim()
+        val joinedTranslation =的过程.joinToString(" ") { it.translation.trim() }.trim()
 
         return TranslationBlock(
             text = joinedText,
