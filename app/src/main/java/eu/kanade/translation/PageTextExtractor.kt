@@ -13,7 +13,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import tachiyomi.core.common.util.system.logcat
 import logcat.LogPriority
-import eu.kanade.tachiyomi.ui.reader.colorize.AiConfig // استيراد إعدادات الذكاء الاصطناعي
+import eu.kanade.tachiyomi.ui.reader.colorize.AiConfig
 
 /** Which OCR engine reads the page. HYBRID runs both and combines the results. */
 enum class OcrMode { MLKIT, PADDLE, HYBRID }
@@ -118,11 +118,61 @@ class PageTextExtractor(
     }
 
     private fun overlapRatio(a: OcrBox, b: OcrBox): Float {
-        val width = min(a.x + a.width, b.x + b.width) - max(a.x, b.x)
-        val height = min(a.y + a.height, b.y + b.height) - max(a.y, b.y)
-        if (width <= 0f || height <= 0f) return 0f
-        val smaller = min(a.width * a.height, b.width * b.height)
-        return if (smaller <= 0f) 0f else width * height / smaller
+        // الفحص السريع إذا لم تكن هناك زاوية ميلان معتبرة
+        if (abs(a.angle) < 1f && abs(b.angle) < 1f) {
+            val width = min(a.x + a.width, b.x + b.width) - max(a.x, b.x)
+            val height = min(a.y + a.height, b.y + b.height) - max(a.y, b.y)
+            if (width <= 0f || height <= 0f) return 0f
+            val smaller = min(a.width * a.height, b.width * b.height)
+            return if (smaller <= 0f) 0f else width * height / smaller
+        }
+
+        // الفحص المتقدم للمستطيلات المائلة (OBB/SAT)
+        if (!checkOcrOBBOverlap(a, b)) return 0f
+
+        val smallerArea = min(a.width * a.height, b.width * b.height)
+        if (smallerArea <= 0f) return 0f
+
+        val cxA = a.x + a.width / 2f
+        val cyA = a.y + a.height / 2f
+        val cxB = b.x + b.width / 2f
+        val cyB = b.y + b.height / 2f
+        val centerDist = sqrt((cxB - cxA) * (cxB - cxA) + (cyB - cyA) * (cyB - cyA))
+        val maxAllowedDist = (max(a.width, b.width) + max(a.height, b.height)) * 0.35f
+        return if (centerDist <= maxAllowedDist) 0.8f else 0.3f
+    }
+
+    private fun checkOcrOBBOverlap(a: OcrBox, b: OcrBox): Boolean {
+        val radA = Math.toRadians(a.angle.toDouble())
+        val cosA = cos(radA).toFloat()
+        val sinA = sin(radA).toFloat()
+        val cxA = a.x + a.width / 2f
+        val cyA = a.y + a.height / 2f
+        val hwA = a.width / 2f
+        val hhA = a.height / 2f
+
+        val radB = Math.toRadians(b.angle.toDouble())
+        val cosB = cos(radB).toFloat()
+        val sinB = sin(radB).toFloat()
+        val cxB = b.x + b.width / 2f
+        val cyB = b.y + b.height / 2f
+        val hwB = b.width / 2f
+        val hhB = b.height / 2f
+
+        val dx = cxB - cxA
+        val dy = cyB - cyA
+
+        fun testAxis(axisX: Float, axisY: Float): Boolean {
+            val distance = abs(dx * axisX + dy * axisY)
+            val radiusA = hwA * abs(cosA * axisX + sinA * axisY) + hhA * abs(-sinA * axisX + cosA * axisY)
+            val radiusB = hwB * abs(cosB * axisX + sinB * axisY) + hhB * abs(-sinB * axisX + cosB * axisY)
+            return distance <= (radiusA + radiusB)
+        }
+
+        return testAxis(cosA, sinA) && 
+               testAxis(-sinA, cosA) && 
+               testAxis(cosB, sinB) && 
+               testAxis(-sinB, cosB)
     }
 
     private fun OcrBox.toBlock() = TranslationBlock(
@@ -150,7 +200,6 @@ class PageTextExtractor(
 
 internal object TextBlockMerger {
 
-    // تعريف الأنماط
     private val urlPattern = Regex("(?i)(https?://\\S+|www\\.\\S+|\\S+\\.(com|net|org|io|me|cc|tv|info))")
     private val symbolsFilterPattern = Regex("""[_~•°^@#$&|\\-]""")
 
@@ -162,15 +211,13 @@ internal object TextBlockMerger {
     ): MutableList<TranslationBlock> {
         if (blocks.isEmpty()) return mutableListOf()
 
-        // 1. التصفية الأولية: تنظيف الروابط والرموز فقط دون حذف النصوص القصيرة لتتمكن من الدمج
         val filteredBlocks = blocks.mapNotNull { block ->
             val cleanedText = block.text
-                .replace(urlPattern, "") // إزالة الروابط وعلامات المائية للمواقع
-                .replace(symbolsFilterPattern, " ") // استبدال الرموز العشوائية بمسافة لتجنب دمج الكلمات خطأ
-                .replace(Regex("\\s+"), " ") // توحيد المسافات الزائدة
+                .replace(urlPattern, "")
+                .replace(symbolsFilterPattern, " ")
+                .replace(Regex("\\s+"), " ")
                 .trim()
 
-            // نحذف في البداية فقط إذا أصبح النص فارغاً تماماً (مثل الروابط البحتة أو الرموز الصرفة)[span_0](start_span)[span_0](end_span)
             if (cleanedText.isBlank()) {
                 null
             } else {
@@ -180,15 +227,9 @@ internal object TextBlockMerger {
 
         if (filteredBlocks.isEmpty()) return mutableListOf()
 
-        val isWebtoon = imgHeight > (imgWidth * 2f)
+        // الاعتماد على نسبة الأبعاد حصرياً لتجنب الأخطاء مع التكبير (Upscaling)
+        val isWebtoon = imgHeight > (imgWidth * 2.0f)
 
-        val xThreshold = (2.5f * (imgWidth / 1200f).coerceAtMost(3.5f)).coerceAtLeast(1.0f)
-        val yThresholdFactor = (1.6f * (imgHeight / 2000f).coerceAtMost(2.6f)).coerceAtLeast(1.0f)
-
-        // ═══════════════════════════════════════════════════════════════════
-        // نظام الدمج التكراري الآمن (Iterative Merge Pass)
-        // يضمن دمج أي أجزاء أو سطور متلامسة لنفس الفقاعة تماماً حتى الاستقرار
-        // ═══════════════════════════════════════════════════════════════════
         var currentBlocks = filteredBlocks.toMutableList()
         var mergedAny: Boolean
         
@@ -204,7 +245,7 @@ internal object TextBlockMerger {
                 for (j in i + 1 until currentBlocks.size) {
                     if (visited[j]) continue
                     
-                    if (shouldMergeTextBlock(currentMerged, currentBlocks[j], xThreshold, yThresholdFactor)) {
+                    if (shouldMergeTextBlock(currentMerged, currentBlocks[j])) {
                         currentMerged = mergeTextBlock(currentMerged, currentBlocks[j], isWebtoon)
                         visited[j] = true
                         mergedAny = true
@@ -215,7 +256,6 @@ internal object TextBlockMerger {
             currentBlocks = nextPassBlocks
         } while (mergedAny && currentBlocks.size > 1)
 
-        // 2. الفلتر النهائي: استبعاد الفقاعات التي بقيت قصيرة جداً (< 2) أو فارغة بعد انتهاء الدمج
         val mergedBlocks = currentBlocks.mapNotNull { block ->
             val text = block.text.trim()
             if (text.isBlank() || text.length < 2) {
@@ -227,9 +267,6 @@ internal object TextBlockMerger {
 
         if (mergedBlocks.isEmpty()) return mutableListOf()
 
-        // ═══════════════════════════════════════════════════════════════
-        // التوسيع (Expansion) — باستخدام معامل التكبير القادم من الإعدادات
-        // ═══════════════════════════════════════════════════════════════
         val expandedBlocks = mergedBlocks.map { block ->
             val cleanedText = block.text.replace("\n", " ").trim()
             val cleanedTranslation = block.translation?.replace("\n", " ")?.trim() ?: ""
@@ -261,16 +298,9 @@ internal object TextBlockMerger {
             )
         }.toMutableList()
 
-        // ═══════════════════════════════════════════════════════════════
-        // منع تصادم الفقاعات — مع العودة للحجم الأساسي عند التعذر
-        // ═══════════════════════════════════════════════════════════════
         resolveCollisions(expandedBlocks, imgWidth, imgHeight)
         return expandedBlocks
     }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // ═══  آلية منع تصادم الفقاعات  ════════════════════════════════════
-    // ═══════════════════════════════════════════════════════════════════
 
     private fun resolveCollisions(blocks: MutableList<TranslationBlock>, imgWidth: Float, imgHeight: Float) {
         val iterations = 6
@@ -382,74 +412,52 @@ internal object TextBlockMerger {
         return count
     }
 
-        private fun isOverlapping(a: TranslationBlock, b: TranslationBlock): Boolean {
-        // الفحص السريع: إذا كانت الفقاعتان أفقيتين تماماً (بدون زاوية ميلان معتبرة)
+    private fun isOverlapping(a: TranslationBlock, b: TranslationBlock): Boolean {
+        // الفحص السريع إذا لم تكن هناك زاوية ميلان معتبرة
         if (abs(a.angle) < 1f && abs(b.angle) < 1f) {
             return a.x < b.x + b.width && a.x + a.width > b.x &&
-                   a.y < b.y + b.height && a.y + a.height > b.y
+                a.y < b.y + b.height && a.y + a.height > b.y
         }
-
-        // الفحص المتقدم والدقيق للمستطيلات الموجهة (OBB) باستخدام نظرية المحور الفاصل (SAT)
+        // الفحص الدقيق للمستطيلات الموّجهة (OBB / SAT)
         return checkOBBOverlap(a, b)
     }
 
     private fun checkOBBOverlap(a: TranslationBlock, b: TranslationBlock): Boolean {
-        // مركز ووصف المستطيل الأول A
         val radA = Math.toRadians(a.angle.toDouble())
         val cosA = cos(radA).toFloat()
         val sinA = sin(radA).toFloat()
-        
         val cxA = a.x + a.width / 2f
         val cyA = a.y + a.height / 2f
         val hwA = a.width / 2f
         val hhA = a.height / 2f
 
-        // مركز ووصف المستطيل الثاني B
         val radB = Math.toRadians(b.angle.toDouble())
         val cosB = cos(radB).toFloat()
         val sinB = sin(radB).toFloat()
-        
         val cxB = b.x + b.width / 2f
         val cyB = b.y + b.height / 2f
         val hwB = b.width / 2f
         val hhB = b.height / 2f
 
-        // المسافة بين المركزين
         val dx = cxB - cxA
         val dy = cyB - cyA
 
-        // دالة مساعدة لحساب إسقاط المستطيلين على أي محور واختبار التصادم عليه
         fun testAxis(axisX: Float, axisY: Float): Boolean {
             val distance = abs(dx * axisX + dy * axisY)
-            
-            // نصف عرض الإسقاط لـ A على المحور
-            constval radiusA = hwA * abs(cosA * axisX + sinA * axisY) + hhA * abs(-sinA * axisX + cosA * axisY)
-            // نصف عرض الإسقاط لـ B على المحور
-            constval radiusB = hwB * abs(cosB * axisX + sinB * axisY) + hhB * abs(-sinB * axisX + cosB * axisY)
-            
+            val radiusA = hwA * abs(cosA * axisX + sinA * axisY) + hhA * abs(-sinA * axisX + cosA * axisY)
+            val radiusB = hwB * abs(cosB * axisX + sinB * axisY) + hhB * abs(-sinB * axisX + cosB * axisY)
             return distance <= (radiusA + radiusB)
         }
 
-        // اختبار المحاور الأربعة الرئيسية للمستطيلين (محوري A ومحوري B)
-        // 1. محور X الخاص بـ A
-        if (!testAxis(cosA, sinA)) return false
-        // 2. محور Y الخاص بـ A
-        if (!testAxis(-sinA, cosA)) return false
-        // 3. محور X الخاص بـ B
-        if (!testAxis(cosB, sinB)) return false
-        // 4. محور Y الخاص بـ B
-        if (!testAxis(-sinB, cosB)) return false
-
-        // إذا تداخلت الإسقاطات على المحاور الأربعة، فهذا يعني وجود تقاطع حقيقي دقيق
-        return true
+        return testAxis(cosA, sinA) && 
+               testAxis(-sinA, cosA) && 
+               testAxis(cosB, sinB) && 
+               testAxis(-sinB, cosB)
     }
-
 
     private fun shouldMergeTextBlock(
         r1: TranslationBlock,
         r2: TranslationBlock,
-        xThreshold: Float,
-        yThresholdFactor: Float,
     ): Boolean {
         val angleDiff = abs(r1.angle - r2.angle)
         val angleSimilar = angleDiff < 15 || abs(angleDiff - 180) < 15
@@ -528,10 +536,20 @@ internal object TextBlockMerger {
                 else { if (a.x > b.x) listOf(a, b) else listOf(b, a) }
             }
         }
+        
+        // دمج ذكي يتجنب المسافات للغات الآسيوية (CJK) ويتركها للغات الأخرى
         val totalLen = (a.text.length + b.text.length).coerceAtLeast(1)
+        val joinedText = if (ordered.any { it.text.any { c -> c.code in 0x4E00..0x9FFF || c.code in 0x3040..0x309F || c.code in 0x30A0..0x30FF } }) {
+            ordered.joinToString("") { it.text.trim() }
+        } else {
+            ordered.joinToString(" ") { it.text.trim() }
+        }
+
+        val joinedTranslation = ordered.joinToString(" ") { it.translation.trim() }.trim()
+
         return TranslationBlock(
-            text = ordered.joinToString(" ") { it.text.trim() },
-            translation = ordered.joinToString(" ") { it.translation.trim() }.trim(),
+            text = joinedText,
+            translation = joinedTranslation,
             width = maxX - minX, height = maxY - minY, x = minX, y = minY,
             angle = if (a.text.length >= b.text.length) a.angle else b.angle,
             symWidth = (a.symWidth * a.text.length + b.symWidth * b.text.length) / totalLen,
