@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.ui.reader.colorize
 
 import android.content.Context
 import android.net.Uri
-import ai.onnxruntime.OrtEnvironment
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import kotlinx.coroutines.currentCoroutineContext
@@ -15,7 +14,6 @@ import java.net.URL
 
 enum class ModelKind(val minBytes: Long) {
     COLORIZER(1L * 1024 * 1024),
-    COLORIZER_SAM(1L * 1024 * 1024),
 }
 
 object ColorizerModelInstaller {
@@ -26,8 +24,6 @@ object ColorizerModelInstaller {
 
     fun modelFile(context: Context, kind: ModelKind): File = when (kind) {
         ModelKind.COLORIZER -> PageColorizer.modelFile(context)
-        // توجيه ملف SAM مباشرة إلى ملف الميزات الثنائي sam_features.bin داخل مجلد colorizer
-        ModelKind.COLORIZER_SAM -> File(File(context.filesDir, "colorizer"), "sam_features.bin")
     }
 
     fun isInstalled(context: Context, kind: ModelKind = ModelKind.COLORIZER): Boolean =
@@ -109,18 +105,10 @@ object ColorizerModelInstaller {
         try {
             when (kind) {
                 ModelKind.COLORIZER -> MangaColorizer(temp).close()
-                // بما أن الملف الجديد عبارة عن ميزات ثنائية (Binary) وليست نموذج ONNX،
-                // تم إزالة محاولة تحميله عبر محرك ONNX والاكتفاء بالتحقق من الحد الأدنى للحجم.
-                ModelKind.COLORIZER_SAM -> {
-                    val expectedSize = ((256 * 64 * 64 + 256 * 32 * 32) * 4).toLong()
-                    if (temp.length() != expectedSize) {
-                        logcat(LogPriority.WARN) { "SAM features file size (${temp.length()} bytes) differs from standard size ($expectedSize bytes)." }
-                    }
-                }
             }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Model installation validation failed for ${kind.name}" }
-            throw IOException("This is not a valid ${kind.name.lowercase()} file: ${e.message}", e)
+            throw IOException("This is not a valid ${kind.name.lowercase()} model: ${e.message}", e)
         }
         val target = modelFile(context, kind)
         target.parentFile?.mkdirs()
