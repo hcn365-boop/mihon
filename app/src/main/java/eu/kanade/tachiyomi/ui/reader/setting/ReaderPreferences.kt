@@ -178,10 +178,9 @@ class ReaderPreferences(
 
     val colorizeModelUrl: Preference<String> = preferenceStore.getString("pref_colorize_model_url", COLORIZE_MODEL_URL)
 
-       // Use the SAM encoder guide, as the official colorizer script does
+    // Use the SAM features guide from assets
     val colorizeUseSam: Preference<Boolean> = preferenceStore.getBoolean("pref_colorize_use_sam", false)
 
-    val colorizeSamModelUrl: Preference<String> = preferenceStore.getString("pref_colorize_sam_model_url", COLORIZE_SAM_MODEL_URL)
     val upscaleEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_upscale_enabled", false)
         
     val upscaleNormalizeEnabled: Preference<Boolean> = preferenceStore.getBoolean("pref_upscale_normalize", false)
@@ -424,9 +423,6 @@ class ReaderPreferences(
             "2fb022c4ce55632b7671a1df306f63984928e36a/models/v6_generator.onnx"
 
         const val UPSCALE_MODELS_BASE_URL = "https://github.com/kato-megumi/anime4kOnnx/raw/master/anime4kOnnx"
-
-        const val COLORIZE_SAM_MODEL_URL =
-            "https://huggingface.co/sharky172/manga-light-colorizer/resolve/main/models/v6_sam_encoder.onnx"
         
         val TapZones = listOf(
             MR.strings.label_default,
