@@ -40,7 +40,9 @@ class OcrSession(
         else -> OcrMode.MLKIT
     }
 
+    // تم تمرير الـ context هنا بنجاح ليعمل كاشف YOLO للفقاعات وتصفية المؤثرات الصوتية (SFX)
     val extractor = PageTextExtractor(
+        context = context,
         mode = effectiveMode,
         isRtl = language == TextRecognizerLanguage.JAPANESE || language == TextRecognizerLanguage.KOREAN,
         mlKit = if (effectiveMode == OcrMode.PADDLE) null else this::runMlKit,
