@@ -180,7 +180,7 @@ internal object TextBlockMerger {
 
         if (filteredBlocks.isEmpty()) return mutableListOf()
 
-        val isWebtoon = imgHeight > 2300f || imgHeight > (imgWidth * 2f)
+        val isWebtoon = imgHeight > (imgWidth * 2f)
 
         val xThreshold = (2.5f * (imgWidth / 1200f).coerceAtMost(3.5f)).coerceAtLeast(1.0f)
         val yThresholdFactor = (1.6f * (imgHeight / 2000f).coerceAtMost(2.6f)).coerceAtLeast(1.0f)
