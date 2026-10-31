@@ -49,7 +49,7 @@ fun getColorizeGroup(readerPreferences: ReaderPreferences): Preference.Preferenc
             ),
             Preference.PreferenceItem.SliderPreference(
                 preference = readerPreferences.colorizeIntensity,
-                valueRange = 0..120,
+                valueRange = 0..220,
                 title = "Color intensity",
                 valueText = { "$it%" },
                 visible = enabled,
