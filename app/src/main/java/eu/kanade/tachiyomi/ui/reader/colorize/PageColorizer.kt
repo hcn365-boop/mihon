@@ -113,7 +113,8 @@ object PageColorizer {
 
     fun upscalerModelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), UPSCALER_FILE)
 
-    private fun samActive(context: Context): Boolean = AiConfig.colorizeUseSam && samModelFile(context).length() > 0
+    private fun samActive(context: Context): Boolean = 
+        AiConfig.colorizeUseSam && File(File(context.filesDir, MODEL_DIR), "sam_features.bin").exists()[span_1](start_span)[span_1](end_span)
 
     fun isModelInstalled(context: Context): Boolean = modelFile(context).length() > 0
 
@@ -311,7 +312,7 @@ object PageColorizer {
                         page = refined
                     }
                     
-                    // تطبيق فلتر التشبع الآمن لرفع حيوية الألوان (يمكنك تعديل القيمة 1.3f حسب رغبتك)
+                    // تطبيق فلتر التشبع الآمن لرفع حيوية الألوان
                     val saturated = applySaturation(page, 1.3f)
                     if (saturated !== page && page !== working) page.recycle()
                     saturated
@@ -339,9 +340,6 @@ object PageColorizer {
         }
     }
 
-    /**
-     * دالة آمنة لتطبيق تشبع الألوان عبر ColorMatrix دون التأثير على حسابات OpenCV أو نموذج ONNX[span_2](start_span)[span_2](end_span).
-     */
     private fun applySaturation(bitmap: Bitmap, saturation: Float): Bitmap {
         val output = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config ?: Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
@@ -445,9 +443,9 @@ object PageColorizer {
         return colorizerManager.getOrPut(key) {
             val guide = if (sam) {
                 try {
-                    SamFeatureProvider.load(samModelFile(context), Acceleration.CPU, AiConfig.aiThreads)
+                    SamFeatureProvider.load(File(context.filesDir, MODEL_DIR))[span_2](start_span)[span_2](end_span)
                 } catch (e: Throwable) {
-                    logcat(LogPriority.ERROR, e) { "SAM encoder: failed to load model file" }
+                    logcat(LogPriority.ERROR, e) { "SAM features: failed to load binary file" }
                     null
                 }
             } else {
