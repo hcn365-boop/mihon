@@ -3,6 +3,10 @@ package eu.kanade.tachiyomi.ui.reader.colorize
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import eu.kanade.translation.PageTranslationRenderer
 import eu.kanade.translation.PageTranslationService
 import eu.kanade.translation.TranslationStore
@@ -217,7 +221,7 @@ object PageColorizer {
         if (translationConfig == null) return base?.let { Buffer().write(it) }
 
         if (!display) {
-            // Read the text now and queue it for translation using the processed/upscaled base image if available[span_1](start_span)[span_1](end_span).
+            // Read the text now and queue it for translation using the processed/upscaled base image if available[span_2](start_span)[span_2](end_span).
             var ocrBitmap: Bitmap? = null
             try {
                 val s = translationConfig
@@ -312,7 +316,11 @@ object PageColorizer {
                         if (refined !== page && page !== working) page.recycle()
                         page = refined
                     }
-                    page
+                    
+                    // تطبيق فلتر التشبع الآمن لرفع حيوية الألوان (1.3f تعني زيادة التشبع بنسبة 30%، يمكنك تعديلها حسب رغبتك)
+                    val saturated = applySaturation(page, 1.3f)
+                    if (saturated !== page && page !== working) page.recycle()
+                    saturated
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -339,6 +347,21 @@ object PageColorizer {
     }
 
     /**
+     * دالة آمنة لتطبيق تشبع الألوان عبر ColorMatrix دون التأثير على حسابات OpenCV أو نموذج ONNX.
+     */
+    private fun applySaturation(bitmap: Bitmap, saturation: Float): Bitmap {
+        val output = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config ?: Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        val paint = Paint().apply {
+            colorFilter = ColorMatrixColorFilter(
+                ColorMatrix().apply { setSaturation(saturation) }
+            )
+        }
+        canvas.drawBitmap(bitmap, 0f, 0f, paint)
+        return output
+    }
+
+    /**
      * Gets the page's translation (from the store, or by reading and translating it) and draws it
      * on the base image. Returns null when the page has no text or the translation failed,
      * so the caller shows the base image instead.
@@ -359,7 +382,7 @@ object PageColorizer {
                 config.ocrMode,
                 imageHash,
                 config.limits,
-            ) { decode(baseBytes).also { ocrBitmap = it } } // <-- تم التحديث لاستخدام الصورة المُعالجة/المكبرة (baseBytes) للـ OCR لضمان دقة أعلى وتطابق تام للإحداثيات[span_2](start_span)[span_2](end_span)
+            ) { decode(baseBytes).also { ocrBitmap = it } } // <-- تم التحديث لاستخدام الصورة المُعالجة/المكبرة (baseBytes) للـ OCR لضمان دقة أعلى وتطابق تام للإحداثيات[span_3](start_span)[span_3](end_span)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -548,7 +571,7 @@ object PageColorizer {
         file.setLastModified(System.currentTimeMillis())
         return MangaColorizer.Chroma(
             FloatArray(CHROMA_SIZE) { data[it].toFloat() },
-            FloatArray(CHROMA_SIZE) { data[CHROMA_SIZE + it].toFloat() },
+            FloatArray(CHROOS_SIZE = CHROMA_SIZE) { data[CHROMA_SIZE + it].toFloat() }
         )
     }
 
