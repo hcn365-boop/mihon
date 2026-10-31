@@ -109,11 +109,10 @@ object PageColorizer {
 
     fun modelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), COLORIZER_FILE)
 
-    fun samModelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), "v6_sam_encoder.onnx")
-
     fun upscalerModelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), UPSCALER_FILE)
 
-    private fun samActive(context: Context): Boolean = AiConfig.colorizeUseSam && samModelFile(context).length() > 0
+    // التحقق من تفعيل ميزة الـ SAM مباشرة عبر الإعدادات
+    private fun samActive(context: Context): Boolean = AiConfig.colorizeUseSam
 
     fun isModelInstalled(context: Context): Boolean = modelFile(context).length() > 0
 
@@ -311,7 +310,7 @@ object PageColorizer {
                         page = refined
                     }
                     
-                    // تطبيق فلتر التشبع الآمن لرفع حيوية الألوان (يمكنك تعديل القيمة 1.3f حسب رغبتك)
+                    // تطبيق فلتر التشبع الآمن لرفع حيوية الألوان
                     val saturated = applySaturation(page, 1.3f)
                     if (saturated !== page && page !== working) page.recycle()
                     saturated
@@ -339,9 +338,6 @@ object PageColorizer {
         }
     }
 
-    /**
-     * دالة آمنة لتطبيق تشبع الألوان عبر ColorMatrix دون التأثير على حسابات OpenCV أو نموذج ONNX[span_2](start_span)[span_2](end_span).
-     */
     private fun applySaturation(bitmap: Bitmap, saturation: Float): Bitmap {
         val output = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config ?: Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
@@ -445,9 +441,9 @@ object PageColorizer {
         return colorizerManager.getOrPut(key) {
             val guide = if (sam) {
                 try {
-                    SamFeatureProvider.load(samModelFile(context), Acceleration.CPU, AiConfig.aiThreads)
+                    SamFeatureProvider.load(context)
                 } catch (e: Throwable) {
-                    logcat(LogPriority.ERROR, e) { "SAM encoder: failed to load model file" }
+                    logcat(LogPriority.ERROR, e) { "SAM features: failed to load binary file" }
                     null
                 }
             } else {
@@ -566,7 +562,7 @@ object PageColorizer {
             ?.filter { !it.name.endsWith(".tmp") }
             ?.sortedBy { it.lastModified() }
             ?: return
-        var total = files.sumOf { it.length() }
+        var total = files.sumOf { file -> file.length() }
         for (file in files) {
             if (total <= limit) break
             total -= file.length()

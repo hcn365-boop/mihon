@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.ui.reader.colorize
 
 import android.content.Context
 import android.net.Uri
-import ai.onnxruntime.OrtEnvironment
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import kotlinx.coroutines.currentCoroutineContext
@@ -15,7 +14,6 @@ import java.net.URL
 
 enum class ModelKind(val minBytes: Long) {
     COLORIZER(1L * 1024 * 1024),
-    COLORIZER_SAM(1L * 1024 * 1024),
 }
 
 object ColorizerModelInstaller {
@@ -26,7 +24,6 @@ object ColorizerModelInstaller {
 
     fun modelFile(context: Context, kind: ModelKind): File = when (kind) {
         ModelKind.COLORIZER -> PageColorizer.modelFile(context)
-        ModelKind.COLORIZER_SAM -> PageColorizer.samModelFile(context)
     }
 
     fun isInstalled(context: Context, kind: ModelKind = ModelKind.COLORIZER): Boolean =
@@ -108,7 +105,6 @@ object ColorizerModelInstaller {
         try {
             when (kind) {
                 ModelKind.COLORIZER -> MangaColorizer(temp).close()
-                ModelKind.COLORIZER_SAM -> OrtSessions.create(OrtEnvironment.getEnvironment(), temp.absolutePath, Acceleration.CPU, 0).close()
             }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e) { "Model installation validation failed for ${kind.name}" }
