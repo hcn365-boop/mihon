@@ -1,10 +1,12 @@
 package eu.kanade.translation
 
+import android.content.Context
 import android.graphics.Bitmap
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import eu.kanade.translation.model.PageTranslation
 import eu.kanade.translation.model.TranslationBlock
+import eu.kanade.translation.recognizer.YoloBubbleDetector
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
@@ -35,6 +37,7 @@ class OcrBox(
  * the caller gives it a bitmap and gets back the page's text blocks (or null if there is no text).
  */
 class PageTextExtractor(
+    private val context: Context?, // أضفنا الـ Context هنا لتمكين تهيئة كاشف YOLO للفقاعات
     private val mode: OcrMode,
     private val isRtl: Boolean,
     private val mlKit: (suspend (InputImage) -> Text)?,
@@ -44,12 +47,33 @@ class PageTextExtractor(
     suspend fun extract(bitmap: Bitmap): PageTranslation? {
         val image = InputImage.fromBitmap(bitmap, 0)
         logcat(LogPriority.ERROR) { ">>> OCR branch selected: mode=$mode <<<" }
-        val boxes = when (mode) {
+        
+        var boxes = when (mode) {
             OcrMode.MLKIT -> mlKitBoxes(image)
             OcrMode.PADDLE -> paddleBoxes(image)
             OcrMode.HYBRID -> combine(mlKitBoxes(image), paddleBoxes(image))
         }
-        logcat(LogPriority.ERROR) { ">>> OCR $mode found ${boxes.size} boxes <<<" }
+
+        // ==========================================
+        // خطوة تصفية الفقاعات عبر YOLO (إلغاء المؤثرات الصوتية SFX)
+        // ==========================================
+        if (context != null && boxes.isNotEmpty()) {
+            try {
+                val detector = YoloBubbleDetector(context)
+                val bubbles = detector.detectBubbles(bitmap)
+                detector.close()
+
+                if (bubbles.isNotEmpty()) {
+                    val originalSize = boxes.size
+                    boxes = filterBoxesByBubbles(boxes, bubbles)
+                    logcat(LogPriority.ERROR) { ">>> YOLO Filter: kept ${boxes.size} out of $originalSize boxes (SFX removed) <<<" }
+                }
+            } catch (e: Exception) {
+                logcat(LogPriority.ERROR, e) { ">>> YOLO Bubble Detection failed, proceeding without filter <<<" }
+            }
+        }
+
+        logcat(LogPriority.ERROR) { ">>> OCR $mode found ${boxes.size} valid text boxes <<<" }
         if (boxes.isEmpty()) return null
 
         val page = PageTranslation(imgWidth = bitmap.width.toFloat(), imgHeight = bitmap.height.toFloat())
@@ -65,6 +89,24 @@ class PageTextExtractor(
             collisionPaddingFactor = paddingFactor
         )
         return page.takeIf { it.blocks.isNotEmpty() }
+    }
+
+    /**
+     * دالة لتصفية صناديق النصوص: تبقي فقط على النصوص التي تقع داخل أو تقاطع فقاعات الحوار المكتشفة بواسطة YOLO.
+     */
+    private fun filterBoxesByBubbles(boxes: List<OcrBox>, bubbles: List<YoloBubbleDetector.BubbleBox>): List<OcrBox> {
+        return boxes.filter { box ->
+            val boxCenterX = box.x + box.width / 2f
+            val boxCenterY = box.y + box.height / 2f
+
+            // التحقق مما إذا كان مركز النص يقع داخل أحد إحداثيات فقاعات YOLO
+            bubbles.any { bubble ->
+                boxCenterX >= bubble.x &&
+                boxCenterX <= (bubble.x + bubble.width) &&
+                boxCenterY >= bubble.y &&
+                boxCenterY <= (bubble.y + bubble.height)
+            }
+        }
     }
 
     private suspend fun mlKitBoxes(image: InputImage): List<OcrBox> {
@@ -118,7 +160,6 @@ class PageTextExtractor(
     }
 
     private fun overlapRatio(a: OcrBox, b: OcrBox): Float {
-        // الفحص السريع إذا لم تكن هناك زاوية ميلان معتبرة
         if (abs(a.angle) < 1f && abs(b.angle) < 1f) {
             val width = min(a.x + a.width, b.x + b.width) - max(a.x, b.x)
             val height = min(a.y + a.height, b.y + b.height) - max(a.y, b.y)
@@ -127,7 +168,6 @@ class PageTextExtractor(
             return if (smaller <= 0f) 0f else width * height / smaller
         }
 
-        // الفحص المتقدم للمستطيلات المائلة (OBB/SAT)
         if (!checkOcrOBBOverlap(a, b)) return 0f
 
         val smallerArea = min(a.width * a.height, b.width * b.height)
@@ -199,7 +239,7 @@ class PageTextExtractor(
 
 
 internal object TextBlockMerger {
-
+    // (تم الحفاظ على دوال الدمج والاصطدامات كما هي تماماً لتجنب أي أخطاء)
     private val urlPattern = Regex("(?i)(https?://\\S+|www\\.\\S+|\\S+\\.(com|net|org|io|me|cc|tv|info))")
     private val symbolsFilterPattern = Regex("""[_~•°^@#$&|\\-]""")
 
@@ -227,7 +267,6 @@ internal object TextBlockMerger {
 
         if (filteredBlocks.isEmpty()) return mutableListOf()
 
-        // الاعتماد على نسبة الأبعاد حصرياً لتجنب الأخطاء مع التكبير (Upscaling)
         val isWebtoon = imgHeight > (imgWidth * 2.0f)
 
         var currentBlocks = filteredBlocks.toMutableList()
@@ -413,12 +452,10 @@ internal object TextBlockMerger {
     }
 
     private fun isOverlapping(a: TranslationBlock, b: TranslationBlock): Boolean {
-        // الفحص السريع إذا لم تكن هناك زاوية ميلان معتبرة
         if (abs(a.angle) < 1f && abs(b.angle) < 1f) {
             return a.x < b.x + b.width && a.x + a.width > b.x &&
                 a.y < b.y + b.height && a.y + a.height > b.y
         }
-        // الفحص الدقيق للمستطيلات الموّجهة (OBB / SAT)
         return checkOBBOverlap(a, b)
     }
 
@@ -537,7 +574,6 @@ internal object TextBlockMerger {
             }
         }
         
-        // دمج ذكي يتجنب المسافات للغات الآسيوية (CJK) ويتركها للغات الأخرى
         val totalLen = (a.text.length + b.text.length).coerceAtLeast(1)
         val joinedText = if (ordered.any { it.text.any { c -> c.code in 0x4E00..0x9FFF || c.code in 0x3040..0x309F || c.code in 0x30A0..0x30FF } }) {
             ordered.joinToString("") { it.text.trim() }
