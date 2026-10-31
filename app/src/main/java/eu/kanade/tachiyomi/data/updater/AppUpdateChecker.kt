@@ -36,9 +36,9 @@ class AppUpdateChecker(
 }
 
 val GITHUB_REPO: String by lazy {
-    // تم توجيه التحديثات دائماً إلى مستودعك الخاص
-    "hcn365-boop/mihon"
+    "hcn365-boop/mihonACUT"
 }
+
 
 val RELEASE_TAG: String by lazy {
     if (isNightlyBuildType) {
