@@ -122,7 +122,7 @@ internal fun ColorizeSettings(prefs: AiPrefs) {
 
     CheckboxItem(label = "Colorize pages (Manga Light V6)", pref = prefs.colorizeEnabled)
     if (enabled) {
-        IntSlider("Color intensity", prefs.colorizeIntensity, 0..220) { "$it%" }
+        IntSlider("Color intensity", prefs.colorizeIntensity, 0..120) { "$it%" }
     }
     CheckboxItem(label = "Use the SAM encoder guide (needs the SAM encoder file)", pref = prefs.colorizeUseSam) // SAM
 
