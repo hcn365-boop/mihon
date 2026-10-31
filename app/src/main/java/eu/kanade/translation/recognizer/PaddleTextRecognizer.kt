@@ -601,6 +601,19 @@ class PaddleTextRecognizer(
     private fun mergeBlocksIntelligently(blocks: List<PaddleTextBlock>): List<PaddleTextBlock> {
         if (blocks.isEmpty()) return emptyList()
 
+        return if (usesWordSpaces) {
+            mergeHorizontalText(blocks)
+        } else {
+            mergeVerticalText(blocks)
+        }
+    }
+
+    /**
+     * معالجة النصوص الأفقية (مثل الإنجليزية)
+     * تضمن دمج الكلمات على نفس السطر فقط وتمنع الاندماج مع الفقاعات المجاورة
+     */
+    private fun mergeHorizontalText(blocks: List<PaddleTextBlock>): List<PaddleTextBlock> {
+        // 1. الترتيب من الأعلى إلى الأسفل لتشكيل الأسطر
         val sortedBlocks = blocks.sortedBy { it.y }
         val lines = mutableListOf<MutableList<PaddleTextBlock>>()
 
@@ -610,7 +623,8 @@ class PaddleTextRecognizer(
                 val leader = line.first()
                 val currentLineCenter = line.map { it.y + it.height / 2f }.average().toFloat()
                 val blockCenter = block.y + block.height / 2f
-                val allowedOverlap = min(leader.height, block.height) * 0.40f
+                // السماح فقط بتداخل رأسي محكم للسطر الواحد
+                val allowedOverlap = min(leader.height, block.height) * 0.35f
 
                 if (abs(blockCenter - currentLineCenter) < allowedOverlap) {
                     line.add(block)
@@ -623,7 +637,8 @@ class PaddleTextRecognizer(
             }
         }
 
-        val intermediateBlocks = mutableListOf<PaddleTextBlock>()
+        // 2. الدمج الأفقي داخل كل سطر بشكل صارم
+        val result = mutableListOf<PaddleTextBlock>()
         for (line in lines) {
             line.sortBy { it.x }
             var current = line.first()
@@ -631,49 +646,85 @@ class PaddleTextRecognizer(
             for (i in 1 until line.size) {
                 val next = line[i]
                 val horizontalGap = next.x - (current.x + current.width)
-                val estimatedCharWidth = if (current.text.isNotEmpty()) current.width / current.text.length else current.height * 0.6f
-
-                val mergeThreshold = estimatedCharWidth * 1.5f
-                val spaceThreshold = estimatedCharWidth * 3.0f
-
-                if (horizontalGap < mergeThreshold) {
-                    current = mergeTwoBlocks(current, next, "")
-                } else if (usesWordSpaces && horizontalGap < spaceThreshold) {
-                    current = mergeTwoBlocks(current, next, " ")
-                } else if (horizontalGap < current.height * 1.2f && !usesWordSpaces) {
-                    current = mergeTwoBlocks(current, next, "")
+                val estimatedCharWidth = if (current.text.isNotEmpty()) {
+                    current.width / current.text.length
                 } else {
-                    intermediateBlocks.add(current)
+                    current.height * 0.5f
+                }
+
+                // عتبة صارمة للمسافة بين الكلمات (تمنع القفز للفقاعات المجاورة)
+                val spaceThreshold = estimatedCharWidth * 1.6f
+
+                if (horizontalGap <= spaceThreshold && horizontalGap >= -estimatedCharWidth) {
+                    current = mergeTwoBlocks(current, next, " ")
+                } else {
+                    result.add(current)
                     current = next
                 }
             }
-            intermediateBlocks.add(current)
+            result.add(current)
         }
 
-        val finalLines = mutableListOf<MutableList<PaddleTextBlock>>()
-        for (block in intermediateBlocks.sortedBy { it.y }) {
+        return result
+    }
+
+    /**
+     * معالجة النصوص العمودية (مثل اليابانية والصينية)
+     * تجمع الحروف داخل الأعمدة رأسياً لمنع تداخل الأعمدة المتجاورات
+     */
+    private fun mergeVerticalText(blocks: List<PaddleTextBlock>): List<PaddleTextBlock> {
+        // 1. الترتيب حسب المكان الأفقي (الأعمدة)
+        val sortedBlocks = blocks.sortedBy { it.x }
+        val columns = mutableListOf<MutableList<PaddleTextBlock>>()
+
+        for (block in sortedBlocks) {
             var placed = false
-            for (line in finalLines) {
-                val currentLineCenter = line.map { it.y + it.height / 2f }.average().toFloat()
-                val blockCenter = block.y + block.height / 2f
-                if (abs(blockCenter - currentLineCenter) < block.height * 0.5f) {
-                    line.add(block)
+            for (col in columns) {
+                val currentColCenter = col.map { it.x + it.width / 2f }.average().toFloat()
+                val blockCenter = block.x + block.width / 2f
+                val allowedOverlap = min(col.first().width, block.width) * 0.40f
+
+                if (abs(blockCenter - currentColCenter) < allowedOverlap) {
+                    col.add(block)
                     placed = true
                     break
                 }
             }
             if (!placed) {
-                finalLines.add(mutableListOf(block))
+                columns.add(mutableListOf(block))
             }
         }
 
+        // 2. الدمج الرأسي داخل كل عمود
         val result = mutableListOf<PaddleTextBlock>()
-        for (line in finalLines) {
-            line.sortBy { it.x }
-            result.addAll(line)
+        for (col in columns) {
+            col.sortBy { it.y }
+            var current = col.first()
+
+            for (i in 1 until col.size) {
+                val next = col[i]
+                val verticalGap = next.y - (current.y + current.height)
+                val estimatedCharHeight = if (current.text.isNotEmpty()) {
+                    current.height / current.text.length
+                } else {
+                    current.width * 0.8f
+                }
+
+                val verticalThreshold = estimatedCharHeight * 1.5f
+
+                if (verticalGap <= verticalThreshold && verticalGap >= -estimatedCharHeight) {
+                    current = mergeTwoBlocks(current, next, "")
+                } else {
+                    result.add(current)
+                    current = next
+                }
+            }
+            result.add(current)
         }
+
         return result
     }
+
 
     private fun mergeTwoBlocks(a: PaddleTextBlock, b: PaddleTextBlock, separator: String): PaddleTextBlock {
         val newX = min(a.x, b.x)
