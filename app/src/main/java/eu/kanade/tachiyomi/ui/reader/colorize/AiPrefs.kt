@@ -60,7 +60,6 @@ class AiPrefs(private val base: ReaderPreferences, private val mangaId: Long?) {
     // region Always general
 
     val colorizeModelUrl: Preference<String> = base.colorizeModelUrl
-    val colorizeSamModelUrl: Preference<String> = base.colorizeSamModelUrl
     val upscaleModelsBaseUrl: Preference<String> = base.upscaleModelsBaseUrl
     val colorizeAcceleration: Preference<String> = base.colorizeAcceleration
     val upscaleAcceleration: Preference<String> = base.upscaleAcceleration
