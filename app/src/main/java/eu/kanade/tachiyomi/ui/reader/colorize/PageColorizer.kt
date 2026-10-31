@@ -109,12 +109,10 @@ object PageColorizer {
 
     fun modelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), COLORIZER_FILE)
 
-    fun samModelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), "v6_sam_encoder.onnx")
-
     fun upscalerModelFile(context: Context): File = File(File(context.filesDir, MODEL_DIR), UPSCALER_FILE)
 
-    private fun samActive(context: Context): Boolean = 
-        AiConfig.colorizeUseSam && File(File(context.filesDir, MODEL_DIR), "sam_features.bin").exists()[span_1](start_span)[span_1](end_span)
+    // التحقق من تفعيل ميزة الـ SAM مباشرة عبر الإعدادات
+    private fun samActive(context: Context): Boolean = AiConfig.colorizeUseSam
 
     fun isModelInstalled(context: Context): Boolean = modelFile(context).length() > 0
 
@@ -443,7 +441,7 @@ object PageColorizer {
         return colorizerManager.getOrPut(key) {
             val guide = if (sam) {
                 try {
-                    SamFeatureProvider.load(File(context.filesDir, MODEL_DIR))[span_2](start_span)[span_2](end_span)
+                    SamFeatureProvider.load(context)
                 } catch (e: Throwable) {
                     logcat(LogPriority.ERROR, e) { "SAM features: failed to load binary file" }
                     null
@@ -564,7 +562,7 @@ object PageColorizer {
             ?.filter { !it.name.endsWith(".tmp") }
             ?.sortedBy { it.lastModified() }
             ?: return
-        var total = files.sumOf { it.length() }
+        var total = files.sumOf { file -> file.length() }
         for (file in files) {
             if (total <= limit) break
             total -= file.length()
