@@ -4,9 +4,13 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
+import ai.onnxruntime.OnnxTensor
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.TensorInfo
 import eu.kanade.translation.PageTranslationRenderer
 import eu.kanade.translation.PageTranslationService
 import eu.kanade.translation.TranslationStore
@@ -20,6 +24,9 @@ import tachiyomi.core.common.util.system.logcat
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.FloatBuffer
 import java.security.MessageDigest
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.roundToInt
@@ -118,6 +125,97 @@ object PageColorizer {
     fun isModelInstalled(context: Context): Boolean = modelFile(context).length() > 0
 
     private fun acnetReady(context: Context): Boolean = true // أصبح النموذج ثابتاً ومدمجاً في الـ Assets
+
+    /**
+     * دالة مؤقتة لتوليد وحفظ ملف ميزات الـ SAM لمرة واحدة على صفحة بيضاء فارغة في ذاكرة الجهاز
+     * بالاسم المحدد: sam_features.bin
+     */
+    fun generateAndSaveSamFeaturesOnce(context: Context) {
+        val modelFile = samModelFile(context)
+        if (!modelFile.exists()) {
+            logcat(LogPriority.ERROR) { "SamGen: نموذج الـ SAM غير موجود!" }
+            return
+        }
+
+        val outputFile = File(File(context.filesDir, MODEL_DIR), "sam_features.bin")
+        if (outputFile.exists()) {
+            logcat(LogPriority.INFO) { "SamGen: ملف الميزات موجود مسبقاً في: ${outputFile.absolutePath}" }
+            return
+        }
+
+        try {
+            val env = OrtEnvironment.getEnvironment()
+            OrtSessions.create(env, modelFile.absolutePath, Acceleration.CPU, 1).use { session ->
+                val inputName = session.inputNames.first()
+                val info = session.inputInfo.getValue(inputName).info as? TensorInfo
+                
+                val defaultSide = 512L
+                val shape = LongArray(info?.shape?.size ?: 4) { i ->
+                    val dim = info?.shape?.get(i) ?: -1
+                    if (dim > 0) dim else defaultSide
+                }
+
+                val width = shape[3].toInt()
+                val height = shape[2].toInt()
+                val whiteBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+                    eraseColor(Color.WHITE)
+                }
+
+                val count = shape.fold(1L) { acc, s -> acc * s }.toInt()
+                val floatBuffer = FloatBuffer.allocate(count)
+                val intValues = IntArray(width * height)
+                whiteBitmap.getPixels(intValues, 0, width, 0, 0, width, height)
+
+                for (i in intValues.indices) {
+                    val pixel = intValues[i]
+                    val r = ((pixel shr 16) and 0xFF) / 255.0f
+                    val g = ((pixel shr 8) and 0xFF) / 255.0f
+                    val b = (pixel and 0xFF) / 255.0f
+                    
+                    floatBuffer.put(i, r)
+                    floatBuffer.put(width * height + i, g)
+                    floatBuffer.put(2 * width * height + i, b)
+                }
+                floatBuffer.rewind()
+
+                OnnxTensor.createTensor(env, floatBuffer, shape).use { inputTensor ->
+                    session.run(mapOf(inputName to inputTensor)).use { result ->
+                        var level0: FloatArray? = null
+                        var level1: FloatArray? = null
+
+                        val level0Size = 256 * 64 * 64
+                        val level1Size = 256 * 32 * 32
+
+                        for (i in 0 until result.size()) {
+                            val tensor = result[i] as? OnnxTensor ?: continue
+                            val s = tensor.info.shape
+                            val buf = tensor.floatBuffer
+                            
+                            if (s.size == 4 && s[1] == 256L && s[2] == 64L && s[3] == 64L) {
+                                level0 = FloatArray(level0Size).also { buf.get(it) }
+                            }
+                            if (s.size == 4 && s[1] == 256L && s[2] == 32L && s[3] == 32L) {
+                                level1 = FloatArray(level1Size).also { buf.get(it) }
+                            }
+                        }
+
+                        if (level0 != null && level1 != null) {
+                            val bytes = ByteBuffer.allocate((level0Size + level1Size) * 4).order(ByteOrder.LITTLE_ENDIAN)
+                            bytes.asFloatBuffer().put(level0).put(level1)
+                            
+                            outputFile.writeBytes(bytes.array())
+                            logcat(LogPriority.INFO) { "SamGen: تم حفظ ملف الميزات بنجاح في: ${outputFile.absolutePath}" }
+                        } else {
+                            logcat(LogPriority.ERROR) { "SamGen: فشل استخراج المخرجات المطلوبة من نموذج الـ SAM" }
+                        }
+                    }
+                }
+                whiteBitmap.recycle()
+            }
+        } catch (e: Throwable) {
+            logcat(LogPriority.ERROR, e) { "SamGen: حدث خطأ أثناء توليد ملف الميزات" }
+        }
+    }
 
     /**
      * تفريغ جميع المحركات وإغلاق جلساتها يدوياً عند الخروج أو تغيير الفصول لتنظيف الذاكرة بالكامل.
@@ -311,7 +409,7 @@ object PageColorizer {
                         page = refined
                     }
                     
-                    // تطبيق فلتر التشبع الآمن لرفع حيوية الألوان (يمكنك تعديل القيمة 1.3f حسب رغبتك)
+                    // تطبيق فلتر التشبع الآمن لرفع حيوية الألوان
                     val saturated = applySaturation(page, 1.3f)
                     if (saturated !== page && page !== working) page.recycle()
                     saturated
@@ -339,9 +437,6 @@ object PageColorizer {
         }
     }
 
-    /**
-     * دالة آمنة لتطبيق تشبع الألوان عبر ColorMatrix دون التأثير على حسابات OpenCV أو نموذج ONNX[span_2](start_span)[span_2](end_span).
-     */
     private fun applySaturation(bitmap: Bitmap, saturation: Float): Bitmap {
         val output = Bitmap.createBitmap(bitmap.width, bitmap.height, bitmap.config ?: Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
@@ -474,7 +569,7 @@ object PageColorizer {
     private fun upscalerEngine(context: Context): PageUpscaler? {
         val files = chosenModelFiles(context)
         if (files.isEmpty() || files.any { it.length() == 0L }) return null
-        val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.upscaleAcceleration
+        val acceleration = if (acceleratorFailed) Acceleration.CPU else AiConfig.colorizeAcceleration
         val key = "models_${files.joinToString("|") { "${it.name}_${it.lastModified()}" }}_${acceleration}_${AiConfig.aiThreads}"
         return upscalerManager.getOrPut(key) { Anime4kStageUpscaler(files, acceleration, AiConfig.aiThreads) }
     }
