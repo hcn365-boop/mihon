@@ -46,20 +46,16 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    if (System.getenv("MIHON_GITHUB_RELEASE").toBoolean()) {
-        signingConfigs {
-            named("debug") {
-                storeFile = file(System.getenv("storeFile"))
-                storePassword = System.getenv("storePassword")
-                keyAlias = System.getenv("keyAlias")
-                keyPassword = System.getenv("keyPassword")
-            }
-        }
-    } else if (keystorePropertiesFile.exists()) {
-        val keystoreProperties = FileInputStream(keystorePropertiesFile).use { Properties().apply { load(it) } }
-
-        signingConfigs {
-            named("debug") {
+    signingConfigs {
+        create("release") {
+            val keystoreFile = file("release.jks")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            } else if (keystorePropertiesFile.exists()) {
+                val keystoreProperties = FileInputStream(keystorePropertiesFile).use { Properties().apply { load(it) } }
                 storeFile = file(keystoreProperties.getProperty("storeFile"))
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
@@ -77,7 +73,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
 
-            signingConfig = debug.signingConfig
+            // ربط نسخة الـ release بمفتاح التوقيع الحقيقي المخصص لفك التشفير
+            signingConfig = signingConfigs.getByName("release")
 
             isProfileable = true
 
