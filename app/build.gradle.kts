@@ -52,7 +52,7 @@ android {
             if (keystoreFile.exists()) {
                 storeFile = keystoreFile
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("ALIAS")
+                keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
             } else if (keystorePropertiesFile.exists()) {
                 val keystoreProperties = FileInputStream(keystorePropertiesFile).use { Properties().apply { load(it) } }
