@@ -70,8 +70,8 @@ android {
             isPseudoLocalesEnabled = true
         }
         val release = getByName("release") {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
 
             // ربط نسخة الـ release بمفتاح التوقيع الحقيقي المخصص لفك التشفير
             signingConfig = signingConfigs.getByName("release")
