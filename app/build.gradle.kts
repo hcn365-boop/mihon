@@ -32,10 +32,12 @@ if (Config.includeTelemetry) {
 val keystorePropertiesFile = layout.settingsDirectory.file("keystore.properties").asFile
 
 android {
+    // الحفاظ على المسار الأصلي لكي لا تنكسر الموارد والتعديلات
     namespace = "eu.kanade.tachiyomi"
 
     defaultConfig {
-        applicationId = "app.mihon"
+        // حزمة مستقلة لكي يعمل التطبيق بجانب Mihon الأصلي دون تعارض
+        applicationId = "com.hcn365.mihonacut"
 
         versionCode = 34
         versionName = "0.20.4"
@@ -46,6 +48,24 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val keystoreFile = file("release.jks")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("KEY_STORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            } else if (keystorePropertiesFile.exists()) {
+                val keystoreProperties = FileInputStream(keystorePropertiesFile).use { Properties().apply { load(it) } }
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     if (System.getenv("MIHON_GITHUB_RELEASE").toBoolean()) {
         signingConfigs {
             named("debug") {
@@ -53,17 +73,6 @@ android {
                 storePassword = System.getenv("storePassword")
                 keyAlias = System.getenv("keyAlias")
                 keyPassword = System.getenv("keyPassword")
-            }
-        }
-    } else if (keystorePropertiesFile.exists()) {
-        val keystoreProperties = FileInputStream(keystorePropertiesFile).use { Properties().apply { load(it) } }
-
-        signingConfigs {
-            named("debug") {
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
-                storePassword = keystoreProperties.getProperty("storePassword")
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-                keyPassword = keystoreProperties.getProperty("keyPassword")
             }
         }
     }
@@ -77,7 +86,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
 
-            signingConfig = debug.signingConfig
+            signingConfig = signingConfigs.getByName("release")
 
             isProfileable = true
 
