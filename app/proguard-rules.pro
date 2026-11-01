@@ -3,6 +3,8 @@
 -keep,allowoptimization class eu.kanade.**
 -keep,allowoptimization class tachiyomi.**
 -keep,allowoptimization class mihon.**
+# حماية حزمتك الخاصة والتعديلات والميزات تماماً مثل حزم المشروع الأصلي
+-keep,allowoptimization class com.hcn365.mihonacut.**
 
 # Keep common dependencies used in extensions
 -keep,allowoptimization class androidx.preference.** { public protected *; }
