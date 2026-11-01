@@ -42,10 +42,10 @@ object MangaTranslationContext {
 object AutoLanguage {
 
     /**
-     * Order of trust:
+     * Order of trust (حسب الأولوية الموثوقة):
      * 1. the language chosen by hand for this manga ([manual]);
      * 2. a language named in brackets in the title, like "(Japanese)" or "[Korean]";
-     * 3. the language of the source;
+     * 3. the language of the source (Tag مثل AR أو EN) كقيمة مؤكدة نهائية؛
      * 4. [fallback], the language set in the settings.
      */
     fun resolve(
@@ -61,9 +61,12 @@ object AutoLanguage {
         if (options.fromTitle) {
             languageFromTitle(title)?.let { return ResolvedLanguage(it, definitive = true) }
         }
+        
+        // الاعتماد الموثوق على لغة المصدر (Tag) واعتبارها نهائية لمنع التخمين الخاطئ في الصفحات الأولى
         if (options.fromSource) {
-            languageFromTag(sourceLang)?.let { return ResolvedLanguage(it, definitive = false) }
+            languageFromTag(sourceLang)?.let { return ResolvedLanguage(it, definitive = true) }
         }
+        
         return ResolvedLanguage(fallback, definitive = false)
     }
 
@@ -73,7 +76,6 @@ object AutoLanguage {
     /** Looks inside the brackets of a title for a language name, such as (Japanese) or [English, Chinese]. */
     fun languageFromTitle(title: String): TextRecognizerLanguage? {
         for (match in BRACKETS.findAll(title)) {
-            // Every word inside the brackets is tried; the first known language wins.
             for (word in match.groupValues[1].split(SEPARATORS)) {
                 languageFromName(word)?.let { return it }
             }
