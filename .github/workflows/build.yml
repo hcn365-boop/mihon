@@ -69,6 +69,10 @@ jobs:
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > app/release.jks
+            echo "Keystore decoded successfully."
+          else
+            echo "::error::SIGNING_KEY secret is missing or empty! Failing build."
+            exit 1
           fi
 
       - name: Build app
