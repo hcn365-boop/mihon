@@ -48,20 +48,14 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystoreFile = file("release.jks")
-            if (keystoreFile.exists()) {
-                storeFile = keystoreFile
+            val ciKeystore = file("release.jks")
+            if (ciKeystore.exists()) {
+                storeFile = ciKeystore
                 storePassword = System.getenv("KEY_STORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
-            }
-        }
-    }
-
-    if (keystorePropertiesFile.exists()) {
-        val keystoreProperties = FileInputStream(keystorePropertiesFile).use { Properties().apply { load(it) } }
-        signingConfigs {
-            named("debug") {
+            } else if (keystorePropertiesFile.exists()) {
+                val keystoreProperties = FileInputStream(keystorePropertiesFile).use { Properties().apply { load(it) } }
                 storeFile = file(keystoreProperties.getProperty("storeFile"))
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
@@ -90,24 +84,18 @@ android {
 
         create("foss") {
             initWith(release)
-
             applicationIdSuffix = ".foss"
-
             matchingFallbacks.addAll(commonMatchingFallbacks)
         }
         create("nightly") {
             initWith(release)
-
             applicationIdSuffix = ".debug"
-
             matchingFallbacks.addAll(commonMatchingFallbacks)
         }
         create("benchmark") {
             initWith(release)
-
             versionNameSuffix = "-benchmark"
             applicationIdSuffix = ".benchmark"
-
             matchingFallbacks.addAll(commonMatchingFallbacks)
         }
 
@@ -143,8 +131,7 @@ android {
                 "libimagedecoder",
                 "libquickjs",
                 "libsqlite3x",
-            )
-                .map { "**/$it.so" }
+            ).map { "**/$it.so" }
         }
         resources {
             excludes += setOf(
@@ -222,7 +209,6 @@ dependencies {
     implementation(projects.presentationWidget)
     implementation(projects.telemetry)
 
-    // Compose
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.material3)
@@ -231,22 +217,14 @@ dependencies {
     debugImplementation(libs.androidx.compose.uiTooling)
     implementation(libs.androidx.compose.uiToolingPreview)
     implementation(libs.androidx.compose.uiUtil)
-
     implementation(libs.androidx.interpolator)
-
     implementation(libs.androidx.paging.runtime)
     implementation(libs.androidx.paging.compose)
-
     implementation(libs.kotlin.reflect)
-
     implementation(libs.bundles.kotlinx.coroutines)
-
     implementation(libs.kotlinx.coroutines.play.services)
-
-
     implementation(libs.kotlinx.datetime)
 
-    // AndroidX libraries
     implementation(libs.androidx.annotation)
     implementation(libs.androidx.appCompat)
     implementation(libs.androidx.biometric)
@@ -256,49 +234,29 @@ dependencies {
     implementation(libs.androidx.recyclerView)
     implementation(libs.androidx.viewPager)
     implementation(libs.androidx.profileInstaller)
-
     implementation(libs.bundles.androidx.lifecycle)
-
-    // Job scheduling
     implementation(libs.androidx.work)
-
-    // RxJava
     implementation(libs.rxJava)
-
-    // Networking
     implementation(libs.bundles.okhttp)
     implementation(libs.okio)
-    implementation(libs.conscrypt) // TLS 1.3 support for Android < 10
-
-    // Data serialization (JSON, protobuf, xml)
+    implementation(libs.conscrypt)
     implementation(libs.bundles.serialization)
-
-    // HTML parser
     implementation(libs.jsoup)
-
-    // Disk
     implementation(libs.diskLruCache)
     implementation(libs.unifile)
-
-    // Preferences
     implementation(libs.androidx.preference)
-
-    // Dependency injection
     implementation(libs.injekt)
     implementation(libs.metro.runtime)
     implementation(libs.metrox.viewmodel)
     implementation(libs.metrox.viewmodel.compose)
 
-    // Image loading
     implementation(libs.bundles.coil)
     implementation(libs.subsamplingScaleImageView) {
         exclude(module = "image-decoder")
     }
     implementation(libs.image.decoder)
-
     implementation(libs.webgpuviewer)
 
-    // UI libraries
     implementation(libs.material)
     implementation(libs.flexibleAdapter)
     implementation(libs.photoView)
@@ -316,20 +274,12 @@ dependencies {
     implementation(libs.bundles.markdown)
     implementation(libs.materialKolor)
 
-    // Logging
     implementation(libs.logcat)
-
-    // Shizuku
     implementation(libs.bundles.shizuku)
-
-    // String similarity
     implementation(libs.stringSimilarity)
-
-    // GraphQL generation
     implementation(libs.apollo)
     implementation(libs.apollo.adapters)
 
-    // Tests
     testImplementation(libs.bundles.test)
     testRuntimeOnly(libs.junit.platform.launcher)
 
@@ -341,11 +291,7 @@ dependencies {
     implementation(libs.google.generativeai)
     implementation("com.google.mlkit:language-id:17.0.6")
 
-
-    // For detecting memory leaks; see https://square.github.io/leakcanary/
-    // debugImplementation(libs.leakCanary.android)
     implementation(libs.leakCanary.plumber)
-
     testImplementation(libs.kotlinx.coroutines.test)
 }
 
@@ -355,13 +301,10 @@ apollo {
         packageName.set("mihon.graphql.anilist")
         val srcDir = "$schemaBasePath/anilist"
         srcDir(file(srcDir))
-
         introspection {
             endpointUrl.set("https://graphql.anilist.co")
             schemaFile.set(file("$srcDir/anilist.graphqls"))
         }
-
-        // ISO 3166-1 alpha-2 country code
         mapScalarToKotlinString("CountryCode")
     }
 
@@ -370,9 +313,7 @@ apollo {
         val srcDir = "$schemaBasePath/kitsu"
         srcDir(file(srcDir))
         android.defaultConfig.versionCode
-
         introspection {
-            // Kitsu doesn't like requests without a UA
             headers.put(
                 "User-Agent",
                 "Mihon v${android.defaultConfig.versionName} (${android.defaultConfig.applicationId})",
@@ -380,30 +321,19 @@ apollo {
             endpointUrl.set("https://kitsu.app/api/graphql")
             schemaFile.set(file("$srcDir/kitsu.graphqls"))
         }
-
-        // A date, expressed as an ISO8601 string
         mapScalarToKotlinString("Date")
-        // An ISO 8601-encoded datetime
         mapScalar("ISO8601DateTime", "kotlin.time.Instant", "com.apollographql.adapter.core.KotlinInstantAdapter")
-        // A loose key-value map in GraphQL
-        mapScalar(
-            "Map",
-            "kotlin.collections.Map<String, Any?>",
-            "mihon.graphql.kitsu.adapter.KitsuMapAdapter",
-        )
+        mapScalar("Map", "kotlin.collections.Map<String, Any?>", "mihon.graphql.kitsu.adapter.KitsuMapAdapter")
     }
 
     service("shikimori") {
         packageName.set("mihon.graphql.shikimori")
         val srcDir = "$schemaBasePath/shikimori"
         srcDir(file(srcDir))
-
         introspection {
             endpointUrl.set("https://shikimori.io/api/graphql")
             schemaFile.set(file("$srcDir/shikimori.graphqls"))
         }
-
-        // An ISO 8601-encoded date
         mapScalarToKotlinString("ISO8601Date")
     }
 
@@ -411,7 +341,6 @@ apollo {
         packageName.set("mihon.graphql.suwayomi")
         val srcDir = "$schemaBasePath/suwayomi"
         srcDir(file(srcDir))
-
         introspection {
             endpointUrl.set("http://localhost:4567/api/graphql")
             schemaFile.set(file("$srcDir/suwayomi.graphqls"))
@@ -447,7 +376,6 @@ androidComponents {
 
     onVariants { variant ->
         val resSource = variant.sources.res ?: return@onVariants
-
         val variantName = variant.name.replaceFirstChar { it.uppercase() }
         val replaceShortcutsPlaceholderTask = tasks.register<ReplaceShortcutsPlaceholderTask>(
             "replace${variantName}ShortcutPlaceholder",
@@ -459,8 +387,6 @@ androidComponents {
     }
 
     onVariants(selector().withFlavor("default" to "standard")) {
-        // Only excluding in standard flavor because this breaks
-        // Layout Inspector's Compose tree
         it.packaging.resources.excludes.add("META-INF/*.version")
     }
 }
