@@ -51,7 +51,7 @@ android {
             val ciKeystore = file("release.jks")
             if (ciKeystore.exists()) {
                 storeFile = ciKeystore
-                storePassword = System.getenv("KEY_STORE_PASSWORD")
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
             } else if (keystorePropertiesFile.exists()) {
